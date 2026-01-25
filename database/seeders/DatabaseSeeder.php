@@ -1,0 +1,47 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+use App\Models\User;
+use App\Models\Wallet;
+use Illuminate\Support\Str;
+
+class DatabaseSeeder extends Seeder
+{
+    public function run(): void
+    {
+        // Admin
+        $admin = User::create([
+            'name' => 'System Admin',
+            'mobile_number' => 'admin',
+            'role' => 'ADMIN',
+            'password' => bcrypt('password'),
+        ]);
+
+        // Merchant
+        $merchant = User::create([
+            'name' => 'Starbucks Coffee',
+            'mobile_number' => 'merchant',
+            'role' => 'MERCHANT',
+            'password' => bcrypt('password'),
+        ]);
+
+        // Customer
+        $customer = User::create([
+            'name' => 'Demo Customer',
+            'mobile_number' => 'customer',
+            'role' => 'CUSTOMER',
+            'password' => bcrypt('password'),
+        ]);
+
+        // Create wallets for them
+        foreach (User::all() as $user) {
+            Wallet::create([
+                'user_id' => $user->id,
+                'uuid' => (string) Str::uuid(),
+                'status' => 'ACTIVE'
+            ]);
+        }
+    }
+}
