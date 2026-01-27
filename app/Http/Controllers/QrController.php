@@ -55,7 +55,11 @@ class QrController extends Controller
 
     public function getBatchCodes($id)
     {
-        $codes = DB::table('qr_codes')->where('batch_id', $id)->get();
+        $codes = DB::table('qr_codes')
+            ->leftJoin('users', 'qr_codes.user_id', '=', 'users.id')
+            ->select('qr_codes.*', 'users.name as merchant_name', 'users.mobile_number as merchant_mobile')
+            ->where('qr_codes.batch_id', $id)
+            ->get();
         return response()->json($codes);
     }
 
