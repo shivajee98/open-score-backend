@@ -22,6 +22,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/wallet/transactions', [WalletController::class, 'getTransactions']);
     Route::get('/wallet/check-pin', [WalletController::class, 'checkPin']);
     Route::post('/wallet/set-pin', [WalletController::class, 'setPin']);
+    Route::post('/wallet/verify-pin', [WalletController::class, 'verifyPin']);
     Route::post('/auth/set-pin', [WalletController::class, 'setPin']); // Alias for frontend
     Route::post('/auth/update-profile', [AuthController::class, 'updateProfile']);
     

@@ -78,4 +78,14 @@ class WalletController extends Controller
         $this->walletService->setPin($wallet->id, $request->pin);
         return response()->json(['message' => 'PIN set successfully']);
     }
+
+    public function verifyPin(Request $request)
+    {
+        $request->validate(['pin' => 'required|digits:6']);
+        $wallet = $this->walletService->getWallet(Auth::id());
+        if (!$wallet) return response()->json(['valid' => false], 404);
+
+        $isValid = $this->walletService->verifyPin($wallet->id, $request->pin);
+        return response()->json(['valid' => $isValid]);
+    }
 }
