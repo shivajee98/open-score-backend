@@ -32,7 +32,7 @@ class AuthController extends Controller
 
         $mobile = $request->mobile_number;
         $otp = $request->otp;
-        $role = $request->role ?? 'CUSTOMER';
+        $role = $request->role; // REMOVE DEFAULT CUSTOMER
 
         // Static Admin Check
         if ($role === 'ADMIN') {
