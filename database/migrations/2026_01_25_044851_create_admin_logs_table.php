@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('admin_id')->constrained('users');
             $table->string('action');
+            $table->text('description')->nullable();
             $table->json('details')->nullable();
             $table->string('ip_address')->nullable();
             $table->timestamps();

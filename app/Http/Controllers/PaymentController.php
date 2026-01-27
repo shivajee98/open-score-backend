@@ -8,6 +8,7 @@ use App\Models\Wallet;
 use App\Services\WalletService;
 use App\Models\Payment;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class PaymentController extends Controller
@@ -21,70 +22,101 @@ class PaymentController extends Controller
 
     public function getMyQr()
     {
-        if (Auth::user()->role !== 'MERCHANT') {
-            return response()->json(['error' => 'Not a merchant'], 403);
-        }
         $wallet = $this->walletService->getWallet(Auth::id());
         if (!$wallet) $wallet = $this->walletService->createWallet(Auth::id());
         
         return response()->json(['qr_data' => $wallet->uuid]);
     }
 
-    public function findMerchant($uuid)
+    public function findPayee($id)
     {
-        $wallet = Wallet::where('uuid', $uuid)->first();
-        if (!$wallet) return response()->json(['error' => 'Not found'], 404);
+        // Check if ID is a VPA
+        if (str_contains($id, '@openscore')) {
+            $mobile = explode('@', $id)[0];
+            $user = User::where('mobile_number', $mobile)->first();
+            if (!$user) return response()->json(['error' => 'User not found'], 404);
+            $wallet = Wallet::where('user_id', $user->id)->first();
+        } else {
+            // Assume UUID
+            $wallet = Wallet::where('uuid', $id)->first();
+        }
+
+        if (!$wallet) return response()->json(['error' => 'Payee wallet not found'], 404);
         
         $user = User::find($wallet->user_id);
-        if ($user->role !== 'MERCHANT') return response()->json(['error' => 'Invalid merchant'], 400);
+        if (!$user) return response()->json(['error' => 'User not found'], 404);
         
         return response()->json([
             'name' => $user->name,
-            'merchant_wallet_uuid' => $wallet->uuid
+            'role' => $user->role,
+            'payee_wallet_uuid' => $wallet->uuid,
+            'vpa' => $user->mobile_number . '@openscore'
         ]);
     }
 
     public function pay(Request $request)
     {
         $request->validate([
-            'merchant_wallet_uuid' => 'required|uuid',
-            'amount' => 'required|numeric|min:0.01'
+            'payee_wallet_uuid' => 'required',
+            'amount' => 'required|numeric|min:0.01',
+            'pin' => 'required|digits:6'
         ]);
 
-        $customer = Auth::user();
-        
-        $customerWallet = $this->walletService->getWallet($customer->id);
-        if (!$customerWallet) $customerWallet = $this->walletService->createWallet($customer->id);
+        return DB::transaction(function () use ($request) {
+            $payer = Auth::user();
+            $payerWallet = $this->walletService->getWallet($payer->id);
+            if (!$payerWallet) $payerWallet = $this->walletService->createWallet($payer->id);
 
-        $payeeWallet = Wallet::where('uuid', $request->merchant_wallet_uuid)->first();
+            // Verify PIN
+            if (!$this->walletService->verifyPin($payerWallet->id, $request->pin)) {
+                throw new \Exception("Invalid PIN");
+            }
 
-        if (!$payeeWallet) {
-            return response()->json(['error' => 'Merchant wallet not found'], 404);
-        }
+            $targetId = $request->payee_wallet_uuid;
+            $payeeWallet = null;
 
-        $payeeUser = User::find($payeeWallet->user_id);
-        if (!$payeeUser || $payeeUser->role !== 'MERCHANT') {
-            return response()->json(['error' => 'Can only pay to registered merchants'], 400);
-        }
+            if (str_contains($targetId, '@openscore')) {
+                $mobile = explode('@', $targetId)[0];
+                $payeeUser = User::where('mobile_number', $mobile)->first();
+                if ($payeeUser) {
+                    $payeeWallet = Wallet::where('user_id', $payeeUser->id)->first();
+                }
+            } else {
+                 $payeeWallet = Wallet::where('uuid', $targetId)->first();
+            }
 
-        $amount = $request->amount;
-        $ref = Str::uuid();
+            if (!$payeeWallet) {
+                return response()->json(['error' => 'Receiver wallet not found'], 404);
+            }
 
-        try {
-            $this->walletService->transfer($customer->id, $payeeUser->id, $amount, $ref);
-            
-            Payment::create([
-                'payer_wallet_id' => $customerWallet->id,
-                'payee_wallet_id' => $payeeWallet->id,
-                'amount' => $amount,
-                'status' => 'COMPLETED',
-                'transaction_ref' => $ref
-            ]);
+            if ($payeeWallet->id === $payerWallet->id) {
+                return response()->json(['error' => 'Cannot transfer to yourself'], 400);
+            }
 
-            return response()->json(['message' => 'Payment Successful', 'ref' => $ref]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
-        }
+            $payeeUser = User::find($payeeWallet->user_id);
+            if (!$payeeUser) {
+                return response()->json(['error' => 'Receiver not found'], 404);
+            }
+
+            $amount = $request->amount;
+            $ref = Str::uuid();
+
+            try {
+                $this->walletService->transfer($payer->id, $payeeUser->id, $amount, $ref);
+                
+                Payment::create([
+                    'payer_wallet_id' => $payerWallet->id,
+                    'payee_wallet_id' => $payeeWallet->id,
+                    'amount' => $amount,
+                    'status' => 'COMPLETED',
+                    'transaction_ref' => $ref
+                ]);
+
+                return response()->json(['message' => 'Transfer Successful', 'ref' => $ref]);
+            } catch (\Exception $e) {
+                return response()->json(['error' => $e->getMessage()], 400);
+            }
+        });
     }
 
     public function requestWithdrawal(Request $request)

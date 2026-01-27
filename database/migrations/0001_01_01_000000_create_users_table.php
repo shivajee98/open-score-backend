@@ -14,6 +14,10 @@ return new class extends Migration
             $table->string('mobile_number')->unique();
             $table->string('email')->nullable()->unique();
             $table->enum('role', ['CUSTOMER', 'MERCHANT', 'ADMIN'])->default('CUSTOMER');
+            $table->string('business_name')->nullable();
+            $table->string('profile_image')->nullable();
+            $table->boolean('is_onboarded')->default(false);
+            $table->string('status')->default('ACTIVE'); // ACTIVE, SUSPENDED
             $table->string('password')->nullable();
             $table->string('otp')->nullable();
             $table->timestamp('otp_expires_at')->nullable();

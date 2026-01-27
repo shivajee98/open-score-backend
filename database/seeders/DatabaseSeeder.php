@@ -6,11 +6,14 @@ use Illuminate\Database\Seeder;
 use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Support\Str;
+use Database\Seeders\AdminSeeder; // Added this line
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(AdminSeeder::class); // Added this line
+
         // Admin
         $admin = User::create([
             'name' => 'System Admin',

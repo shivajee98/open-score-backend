@@ -30,35 +30,79 @@ class AuthController extends Controller
             'role' => 'nullable|string|in:CUSTOMER,MERCHANT,ADMIN'
         ]);
 
-        // FOR DEMO: Bypass verification
-        $user = \App\Models\User::where('mobile_number', $request->mobile_number)->first();
-        $selectedRole = $request->role ?? 'CUSTOMER';
+        $mobile = $request->mobile_number;
+        $otp = $request->otp;
+        $role = $request->role ?? 'CUSTOMER';
 
-        if (!$user) {
-            // Create a demo user on the fly
-            $user = \App\Models\User::create([
-                'name' => 'Demo ' . ucfirst(strtolower($selectedRole)) . ' (' . $request->mobile_number . ')',
-                'mobile_number' => $request->mobile_number,
-                'role' => $selectedRole,
-                'password' => bcrypt('password'),
-            ]);
+        // Static Admin Check
+        if ($role === 'ADMIN') {
+            if ($mobile === '9478563245' && $otp === '849645') {
+                 $user = \App\Models\User::where('mobile_number', $mobile)->first();
+                 if (!$user || $user->role !== 'ADMIN') {
+                     return response()->json(['error' => 'Admin user not found or invalid role.'], 403);
+                 }
+            } else {
+                 return response()->json(['error' => 'Invalid Admin Credentials'], 401);
+            }
         } else {
-            // Update role to match selection for demo flexibility
-            $user->role = $selectedRole;
-            $user->save();
+             // Normal User OTP Bypass (Demo)
+             // In prod, check real OTP here.
+             $user = \App\Models\User::where('mobile_number', $mobile)->first();
+             
+             if (!$user) {
+                 // Create new user (Customer/Merchant)
+                 $user = \App\Models\User::create([
+                     'mobile_number' => $mobile,
+                     'role' => $role,
+                     'status' => 'ACTIVE',
+                     'is_onboarded' => false,
+                     'password' => bcrypt('password'),
+                 ]);
+             } else {
+                 // Prevent login if trying to access as different role (optional, but good for security)
+                 // For now, if existing user logs in, we use their existing role unless strict check needed
+             }
         }
 
-        // Ensure wallet exists for Transactional roles
-        if (in_array($user->role, ['CUSTOMER', 'MERCHANT'])) {
-            $walletService = app(\App\Services\WalletService::class);
-            if (!$walletService->getWallet($user->id)) {
-                $walletService->createWallet($user->id);
-            }
+        // Final Suspension Check
+        if (($user->status ?? 'ACTIVE') === 'SUSPENDED') {
+            return response()->json(['error' => 'Your account has been suspended. Please contact support.'], 403);
         }
 
         $token = Auth::guard('api')->login($user);
 
-        return $this->respondWithToken($token);
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'user' => $user,
+            'onboarding_status' => $user->is_onboarded ? 'COMPLETED' : 'REQUIRED'
+        ]);
+    }
+
+    public function completeOnboarding(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . Auth::id(),
+            'business_name' => 'nullable|string|max:255',
+        ]);
+
+        $user = \App\Models\User::find(Auth::id());
+        $user->name = $request->name;
+        $user->email = $request->email;
+        if ($request->business_name) {
+            $user->business_name = $request->business_name;
+        }
+        $user->is_onboarded = true;
+        $user->save();
+
+        // Create Wallet NOW (not at login)
+        $walletService = app(\App\Services\WalletService::class);
+        if (!$walletService->getWallet($user->id)) {
+            $walletService->createWallet($user->id);
+        }
+
+        return response()->json(['message' => 'Onboarding completed', 'user' => $user]);
     }
 
     public function me()
@@ -72,25 +116,21 @@ class AuthController extends Controller
         return response()->json(['message' => 'Successfully logged out']);
     }
 
-    public function listMerchants()
+    public function listPayees()
     {
-        $merchants = \App\Models\User::where('role', 'MERCHANT')->get();
-        $data = $merchants->map(function ($m) {
-            $wallet = \App\Models\Wallet::where('user_id', $m->id)->first();
+        $payees = \App\Models\User::whereIn('role', ['MERCHANT', 'CUSTOMER'])
+            ->where('id', '!=', Auth::id())
+            ->get();
+            
+        $data = $payees->map(function ($p) {
+            $wallet = \App\Models\Wallet::where('user_id', $p->id)->first();
             return [
-                'name' => $m->name,
-                'wallet_uuid' => $wallet ? $wallet->uuid : null
+                'name' => $p->name,
+                'role' => $p->role,
+                'wallet_uuid' => $wallet ? $wallet->uuid : null,
+                'vpa' => $p->mobile_number . '@openscore'
             ];
         });
         return response()->json($data);
-    }
-
-    protected function respondWithToken($token)
-    {
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'bearer',
-            'user' => Auth::guard('api')->user()
-        ]);
     }
 }
