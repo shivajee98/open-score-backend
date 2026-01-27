@@ -7,6 +7,7 @@ use App\Http\Controllers\WalletController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\QrController;
 
 Route::post('/auth/otp', [AuthController::class, 'requestOtp']);
 Route::post('/auth/verify', [AuthController::class, 'verifyOtp']);
@@ -53,4 +54,11 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/funds/pending', [AdminController::class, 'getPendingTransactions']);
     Route::post('/admin/funds/{id}/approve', [AdminController::class, 'approveFund']);
     Route::post('/admin/funds/{id}/reject', [AdminController::class, 'rejectFund']);
+
+    // QR Codes
+    Route::post('/admin/qr/generate', [QrController::class, 'generate']);
+    Route::get('/admin/qr/batches', [QrController::class, 'getBatches']);
+    Route::get('/admin/qr/batches/{id}', [QrController::class, 'getBatchCodes']);
+    
+    Route::post('/merchant/link-qr', [QrController::class, 'link']);
 });

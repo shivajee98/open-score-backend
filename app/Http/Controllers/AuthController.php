@@ -46,10 +46,13 @@ class AuthController extends Controller
             }
         } else {
              // Normal User OTP Bypass (Demo)
-             // In prod, check real OTP here.
              $user = \App\Models\User::where('mobile_number', $mobile)->first();
              
              if (!$user) {
+                 if (!$role) {
+                     return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
+                 }
+                 
                  // Create new user (Customer/Merchant)
                  $user = \App\Models\User::create([
                      'mobile_number' => $mobile,
@@ -58,9 +61,6 @@ class AuthController extends Controller
                      'is_onboarded' => false,
                      'password' => bcrypt('password'),
                  ]);
-             } else {
-                 // Prevent login if trying to access as different role (optional, but good for security)
-                 // For now, if existing user logs in, we use their existing role unless strict check needed
              }
         }
 
