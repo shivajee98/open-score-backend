@@ -33,8 +33,8 @@ class AdminController extends Controller
                 'name' => $user->name,
                 'mobile_number' => $user->mobile_number,
                 'role' => $user->role,
-                'status' => $user->status ?? 'ACTIVE', // Default to active if field missing
-                'wallet_balance' => $wallet ? $wallet->balance : 0
+                'status' => $user->status ?? 'ACTIVE',
+                'wallet_balance' => $wallet ? $this->walletService->getBalance($wallet->id) : 0
             ];
         });
         return response()->json($users);
