@@ -65,6 +65,12 @@ class AuthController extends Controller
                  // Create Wallet for new user
                  $walletService = app(\App\Services\WalletService::class);
                  $walletService->createWallet($user->id);
+             } else {
+                 // If user exists but is not onboarded, update the role if provided
+                 if (!$user->is_onboarded && $role) {
+                     $user->role = $role;
+                     $user->save();
+                 }
              }
         }
 
