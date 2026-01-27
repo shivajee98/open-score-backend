@@ -61,6 +61,10 @@ class AuthController extends Controller
                      'is_onboarded' => false,
                      'password' => bcrypt('password'),
                  ]);
+
+                 // Create Wallet for new user
+                 $walletService = app(\App\Services\WalletService::class);
+                 $walletService->createWallet($user->id);
              }
         }
 
