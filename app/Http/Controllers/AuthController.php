@@ -133,4 +133,19 @@ class AuthController extends Controller
         });
         return response()->json($data);
     }
+    public function updateProfile(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . Auth::id(),
+            // business_name only if merchant? Let's keep it simple for now or usage same logic as onboarding
+        ]);
+
+        $user = \App\Models\User::find(Auth::id());
+        $user->name = $request->name;
+        $user->email = $request->email;
+        $user->save();
+
+        return response()->json(['message' => 'Profile updated successfully', 'user' => $user]);
+    }
 }
