@@ -19,11 +19,19 @@ class LoanController extends Controller
 
     public function apply(Request $request)
     {
-        $request->validate(['amount' => 'required|numeric|min:1']);
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'tenure' => 'required|integer',
+            'payout_frequency' => 'required|string',
+            'payout_option_id' => 'required|string'
+        ]);
         
         $loan = Loan::create([
             'user_id' => Auth::id(),
             'amount' => $request->amount,
+            'tenure' => $request->tenure,
+            'payout_frequency' => $request->payout_frequency,
+            'payout_option_id' => $request->payout_option_id,
             'status' => 'PENDING'
         ]);
 
