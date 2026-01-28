@@ -7,6 +7,7 @@ use App\Models\Loan;
 use App\Services\WalletService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class LoanController extends Controller
 {
@@ -90,9 +91,13 @@ class LoanController extends Controller
         }
 
         $loan->status = 'KYC_SENT';
+        $loan->kyc_token = (string) Str::uuid();
         $loan->save();
 
-        return response()->json($loan);
+        return response()->json([
+            'loan' => $loan,
+            'kyc_link' => "https://open-score-kyc.vercel.app/form/{$loan->kyc_token}"
+        ]);
     }
 
     public function submitForm(Request $request, $id)
@@ -113,6 +118,39 @@ class LoanController extends Controller
         $loan->save();
 
         return response()->json($loan);
+    }
+
+    // --- External KYC System Methods ---
+
+    public function verifyKycToken($token)
+    {
+        $loan = Loan::where('kyc_token', $token)->firstOrFail();
+
+        if ($loan->status === 'FORM_SUBMITTED' || $loan->kyc_submitted_at) {
+            return response()->json(['error' => 'Already submitted'], 400);
+        }
+
+        return response()->json([
+            'loan_id' => $loan->id,
+            'amount' => $loan->amount,
+            'status' => $loan->status
+        ]);
+    }
+
+    public function submitKycData(Request $request, $token)
+    {
+        $loan = Loan::where('kyc_token', $token)->firstOrFail();
+
+        if ($loan->kyc_submitted_at) {
+            return response()->json(['error' => 'Already submitted'], 400);
+        }
+
+        $loan->form_data = array_merge($loan->form_data ?? [], $request->all());
+        $loan->status = 'FORM_SUBMITTED';
+        $loan->kyc_submitted_at = now();
+        $loan->save();
+
+        return response()->json(['message' => 'KYC submitted successfully']);
     }
 
     public function approve(Request $request, $id)

@@ -14,6 +14,8 @@ class Loan extends Model
         'payout_option_id', 
         'status',
         'form_data',
+        'kyc_token',
+        'kyc_submitted_at',
         'approved_at',
         'approved_by',
         'disbursed_at',
@@ -22,6 +24,7 @@ class Loan extends Model
 
     protected $casts = [
         'form_data' => 'array',
+        'kyc_submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'disbursed_at' => 'datetime'
     ];

@@ -33,6 +33,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/loans/{id}/confirm', [LoanController::class, 'confirm']);
     Route::post('/loans/{id}/submit-form', [LoanController::class, 'submitForm']);
     
+    // External KYC (Publicly accessible with token)
+    Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
+    Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
+    
     // Admin
     Route::post('/admin/loans/{id}/proceed', [LoanController::class, 'proceed']);
     Route::post('/admin/loans/{id}/send-kyc', [LoanController::class, 'sendKyc']);
