@@ -123,9 +123,9 @@ class LoanController extends Controller
 
         $loan = Loan::findOrFail($id);
         
-        // Allow sending KYC if PROCEEDED (first time) or KYC_SENT (resending/fixing)
-        if (!in_array($loan->status, ['PROCEEDED', 'KYC_SENT'])) {
-            return response()->json(['error' => 'Can only send KYC from PROCEEDED or KYC_SENT state'], 400);
+        // Allow sending KYC if PROCEEDED (first time), KYC_SENT (resending), or FORM_SUBMITTED (resending after submission)
+        if (!in_array($loan->status, ['PROCEEDED', 'KYC_SENT', 'FORM_SUBMITTED'])) {
+            return response()->json(['error' => 'Can only send KYC from PROCEEDED, KYC_SENT, or FORM_SUBMITTED state'], 400);
         }
 
         // Always generate a token if it's missing or if we want to refresh it
