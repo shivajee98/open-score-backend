@@ -122,12 +122,19 @@ class LoanController extends Controller
         }
 
         $loan = Loan::findOrFail($id);
-        if ($loan->status !== 'PROCEEDED') {
-            return response()->json(['error' => 'Can only send KYC from PROCEEDED state'], 400);
+        
+        // Allow sending KYC if PROCEEDED (first time) or KYC_SENT (resending/fixing)
+        if (!in_array($loan->status, ['PROCEEDED', 'KYC_SENT'])) {
+            return response()->json(['error' => 'Can only send KYC from PROCEEDED or KYC_SENT state'], 400);
         }
 
+        // Always generate a token if it's missing or if we want to refresh it
+        // For now, let's only generate if missing or explicitly asked (though here we just always ensure it exists)
+        if (!$loan->kyc_token) {
+            $loan->kyc_token = (string) Str::uuid();
+        }
+        
         $loan->status = 'KYC_SENT';
-        $loan->kyc_token = (string) Str::uuid();
         $loan->save();
 
         return response()->json([
