@@ -16,6 +16,7 @@ class Loan extends Model
         'form_data',
         'kyc_token',
         'kyc_submitted_at',
+        'paid_amount',
         'approved_at',
         'approved_by',
         'disbursed_at',

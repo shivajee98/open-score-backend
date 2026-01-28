@@ -8,6 +8,8 @@ use App\Services\WalletService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Models\LoanRepayment;
+use Carbon\Carbon;
 
 class LoanController extends Controller
 {
@@ -26,6 +28,21 @@ class LoanController extends Controller
             'payout_frequency' => 'required|string',
             'payout_option_id' => 'required|string'
         ]);
+
+        // Restriction: Only one active/pending loan allowed
+        $activeLoan = Loan::where('user_id', Auth::id())
+            ->whereNotIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED'])
+            ->exists();
+
+        // Note: Even if it's DISBURSED, if it's not fully paid back, we might want to restrict it.
+        // But the user said "under process", which usually means Pending -> Approved.
+        // However, usually you can't have two loans at once anyway.
+        if ($activeLoan) {
+            return response()->json([
+                'error' => 'Active loan found',
+                'message' => 'You already have a loan application in progress. Please complete or cancel your previous loan before applying for a new one.'
+            ], 403);
+        }
         
         $loan = Loan::create([
             'user_id' => Auth::id(),
@@ -55,6 +72,25 @@ class LoanController extends Controller
         $loan->save();
 
         return response()->json($loan);
+    }
+
+    public function cancel(Request $request, $id)
+    {
+        $loan = Loan::findOrFail($id);
+
+        if ($loan->user_id !== Auth::id()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Can only cancel if not yet DISBURSED and not already REJECTED/CANCELLED
+        if (in_array($loan->status, ['DISBURSED', 'REJECTED', 'CANCELLED'])) {
+            return response()->json(['error' => 'Cannot cancel loan in current status'], 400);
+        }
+
+        $loan->status = 'CANCELLED';
+        $loan->save();
+
+        return response()->json(['message' => 'Loan application cancelled successfully']);
     }
 
     public function index()
@@ -202,6 +238,9 @@ class LoanController extends Controller
             
             $this->walletService->credit($wallet->id, $loan->amount, 'LOAN', $loan->id, "Loan Disbursed");
 
+            // Generate Repayment Schedule
+            $this->generateRepaymentSchedule($loan);
+
             DB::table('admin_logs')->insert([
                 'admin_id' => Auth::id(),
                 'action' => 'loan_disbursed',
@@ -214,6 +253,89 @@ class LoanController extends Controller
         return response()->json($loan);
     }
     
+    private function generateRepaymentSchedule($loan)
+    {
+        $amount = $loan->amount;
+        $frequency = $loan->payout_frequency; // DAILY, WEEKLY, MONTHLY
+        $tenureMonths = $loan->tenure;
+        
+        // Simple logic for interest/fees if already included in total payable
+        // For now, let's assume we recoup the Principal + GST + Fees.
+        // Wait, the user said "Principal = Disbursal", so the repayment is Principal + Fees.
+        $processingFee = $loan->amount == 10000 ? 0 : 1200;
+        $loginFee = $loan->amount == 10000 ? 300 : 200;
+        $fieldKycFee = $loan->amount == 10000 ? 500 : 600;
+        $gstAmount = round($loan->amount * 0.18);
+        
+        // Re-calculating same way as frontend for consistency
+        $gstAmount = round($loan->amount * 0.18);
+        $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount;
+        $totalPayable = $loan->amount + $totalFees;
+
+        $totalEmis = 0;
+        $intervalDays = 0;
+
+        if ($frequency === 'DAILY') {
+            $totalEmis = $tenureMonths * 30;
+            $intervalDays = 1;
+        } elseif ($frequency === 'WEEKLY') {
+            $totalEmis = $tenureMonths * 4;
+            $intervalDays = 7;
+        } else { // MONTHLY
+            $totalEmis = $tenureMonths;
+            $intervalDays = 30;
+        }
+
+        $emiAmount = round($totalPayable / $totalEmis, 2);
+        
+        for ($i = 1; $i <= $totalEmis; $i++) {
+            LoanRepayment::create([
+                'loan_id' => $loan->id,
+                'amount' => $emiAmount,
+                'due_date' => Carbon::now()->addDays($i * $intervalDays)->toDateString(),
+                'status' => 'PENDING'
+            ]);
+        }
+    }
+
+    public function repayments($id)
+    {
+        $loan = Loan::findOrFail($id);
+        if ($loan->user_id !== Auth::id()) return response()->json(['error' => 'Unauthorized'], 403);
+
+        $repayments = LoanRepayment::where('loan_id', $id)->orderBy('due_date', 'asc')->get();
+        return response()->json([
+            'loan' => $loan,
+            'repayments' => $repayments
+        ]);
+    }
+
+    public function repay(Request $request, $loan_id)
+    {
+        $loan = Loan::findOrFail($loan_id);
+        $repayment = LoanRepayment::where('loan_id', $loan_id)
+            ->where('status', 'PENDING')
+            ->orderBy('due_date', 'asc')
+            ->firstOrFail();
+
+        $wallet = $this->walletService->getWallet(Auth::id());
+        if ($wallet->balance < $repayment->amount) {
+            return response()->json(['error' => 'Insufficient balance in wallet'], 400);
+        }
+
+        DB::transaction(function () use ($loan, $repayment, $wallet) {
+            $this->walletService->debit($wallet->id, $repayment->amount, 'LOAN_REPAYMENT', $repayment->id, "EMI Payment - #{$repayment->id}");
+            
+            $repayment->status = 'PAID';
+            $repayment->paid_at = now();
+            $repayment->save();
+
+            $loan->increment('paid_amount', $repayment->amount);
+        });
+
+        return response()->json(['message' => 'Repayment successful', 'repayment' => $repayment]);
+    }
+
     public function listAll()
     {
         if (Auth::user()->role !== 'ADMIN') {

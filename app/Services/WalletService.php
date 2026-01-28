@@ -81,6 +81,7 @@ class WalletService
                 'wallet_id' => $walletId,
                 'type' => 'DEBIT',
                 'amount' => $amount,
+                'status' => 'COMPLETED',
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
                 'description' => $description
