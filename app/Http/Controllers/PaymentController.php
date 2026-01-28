@@ -40,6 +40,9 @@ class PaymentController extends Controller
         } elseif (is_numeric($id) && strlen($id) >= 10) {
             // Mobile number handler
             $user = User::where('mobile_number', $id)->first();
+        } elseif (str_contains($id, '@') && !str_contains($id, '@openscore')) {
+            // Email handler
+            $user = User::where('email', $id)->first();
         } else {
             // Assume UUID
             $wallet = Wallet::where('uuid', $id)->first();
