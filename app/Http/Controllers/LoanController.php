@@ -359,13 +359,14 @@ class LoanController extends Controller
             return response()->json(['error' => 'Invalid transaction PIN'], 403);
         }
 
-        $balance = $this->walletService->getBalance($wallet->id);
-        if ($balance < $repayment->amount) {
-            return response()->json(['error' => 'Insufficient balance in wallet'], 400);
-        }
+        // $balance = $this->walletService->getBalance($wallet->id);
+        // if ($balance < $repayment->amount) {
+        //     return response()->json(['error' => 'Insufficient balance in wallet'], 400);
+        // }
 
         DB::transaction(function () use ($loan, $repayment, $wallet) {
-            $this->walletService->debit($wallet->id, $repayment->amount, 'LOAN_REPAYMENT', $repayment->id, "EMI Payment - #{$repayment->id}");
+            // TRIAL MODE: Bypass wallet deduction
+            // $this->walletService->debit($wallet->id, $repayment->amount, 'LOAN_REPAYMENT', $repayment->id, "EMI Payment - #{$repayment->id}");
 
             $repayment->status = 'PAID';
             $repayment->paid_at = now();
