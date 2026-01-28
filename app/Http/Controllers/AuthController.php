@@ -91,25 +91,56 @@ class AuthController extends Controller
 
     public function completeOnboarding(Request $request)
     {
-        $request->validate([
+        $user = \App\Models\User::find(Auth::id());
+        
+        $rules = [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
-            'business_name' => 'nullable|string|max:255',
-        ]);
+        ];
 
-        $user = \App\Models\User::find(Auth::id());
+        if ($user->role === 'MERCHANT') {
+            $rules = array_merge($rules, [
+                'business_name' => 'required|string|max:255',
+                'business_nature' => 'required|string|max:255',
+                'customer_segment' => 'required|string|max:255',
+                'daily_turnover' => 'required|string|max:255',
+                'business_address' => 'nullable|string',
+            ]);
+        }
+
+        $request->validate($rules);
+
         $user->name = $request->name;
         $user->email = $request->email;
-        if ($request->business_name) {
-            $user->business_name = $request->business_name;
-        }
         $user->is_onboarded = true;
+
+        if ($user->role === 'MERCHANT') {
+            $user->business_name = $request->business_name;
+            $user->business_nature = $request->business_nature;
+            $user->customer_segment = $request->customer_segment;
+            $user->daily_turnover = $request->daily_turnover;
+            $user->business_address = $request->business_address;
+        }
+
         $user->save();
 
-        // Create Wallet NOW (not at login)
+        // Create Wallet and Credit Bonus
         $walletService = app(\App\Services\WalletService::class);
-        if (!$walletService->getWallet($user->id)) {
-            $walletService->createWallet($user->id);
+        $wallet = $walletService->getWallet($user->id);
+        
+        if (!$wallet) {
+            $wallet = $walletService->createWallet($user->id);
+        }
+
+        // Add 250 Bonus for Merchant
+        if ($user->role === 'MERCHANT') {
+            $walletService->credit(
+                $wallet->id, 
+                250.00, 
+                'ONBOARDING_BONUS', 
+                $user->id, 
+                'Welcome bonus for onboarded Merchant'
+            );
         }
 
         return response()->json(['message' => 'Onboarding completed', 'user' => $user]);

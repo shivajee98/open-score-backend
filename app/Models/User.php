@@ -20,6 +20,10 @@ class User extends Authenticatable implements JWTSubject
         'profile_image',
         'is_onboarded',
         'status',
+        'business_nature',
+        'customer_segment',
+        'daily_turnover',
+        'business_address',
         'otp',
         'otp_expires_at'
     ];
