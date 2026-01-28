@@ -63,6 +63,10 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser']);
     Route::post('/admin/users/{id}/status', [AdminController::class, 'updateStatus']);
     
+    // Admin Analytics
+    Route::get('/admin/analytics/dashboard', [\App\Http\Controllers\AnalyticsController::class, 'getDashboardStats']);
+    Route::get('/admin/analytics/deep', [\App\Http\Controllers\AnalyticsController::class, 'getDeepAnalytics']);
+
     // Admin Fund Approval
     Route::get('/admin/funds/pending', [AdminController::class, 'getPendingTransactions']);
     Route::post('/admin/funds/{id}/approve', [AdminController::class, 'approveFund']);
