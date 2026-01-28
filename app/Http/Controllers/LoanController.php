@@ -330,6 +330,10 @@ class LoanController extends Controller
 
     public function repay(Request $request, $loan_id)
     {
+        $request->validate([
+            'pin' => 'required|digits:6'
+        ]);
+
         $loan = Loan::findOrFail($loan_id);
         $repayment = LoanRepayment::where('loan_id', $loan_id)
             ->where('status', 'PENDING')
@@ -337,6 +341,12 @@ class LoanController extends Controller
             ->firstOrFail();
 
         $wallet = $this->walletService->getWallet(Auth::id());
+
+        // Verify PIN
+        if (!$this->walletService->verifyPin($wallet->id, $request->pin)) {
+            return response()->json(['error' => 'Invalid transaction PIN'], 403);
+        }
+
         $balance = $this->walletService->getBalance($wallet->id);
         if ($balance < $repayment->amount) {
             return response()->json(['error' => 'Insufficient balance in wallet'], 400);
@@ -344,7 +354,7 @@ class LoanController extends Controller
 
         DB::transaction(function () use ($loan, $repayment, $wallet) {
             $this->walletService->debit($wallet->id, $repayment->amount, 'LOAN_REPAYMENT', $repayment->id, "EMI Payment - #{$repayment->id}");
-            
+
             $repayment->status = 'PAID';
             $repayment->paid_at = now();
             $repayment->save();
@@ -352,7 +362,7 @@ class LoanController extends Controller
             $loan->increment('paid_amount', $repayment->amount);
         });
 
-        return response()->json(['message' => 'Repayment successful', 'repayment' => $repayment]);
+        return response()->json(['message' => 'Repayment successful', 'repayment' => $repayment, 'ref' => 'REPAY-' . strtoupper(Str::random(10))]);
     }
 
     public function listAll()
