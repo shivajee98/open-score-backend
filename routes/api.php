@@ -30,9 +30,13 @@ Route::middleware('auth:api')->group(function () {
     // Loan
     Route::post('/loans/apply', [LoanController::class, 'apply']);
     Route::get('/loans', [LoanController::class, 'index']);
+    Route::post('/loans/{id}/submit-form', [LoanController::class, 'submitForm']);
     
     // Admin
+    Route::post('/admin/loans/{id}/proceed', [LoanController::class, 'proceed']);
+    Route::post('/admin/loans/{id}/send-kyc', [LoanController::class, 'sendKyc']);
     Route::post('/admin/loans/{id}/approve', [LoanController::class, 'approve']);
+    Route::post('/admin/loans/{id}/release', [LoanController::class, 'release']);
     Route::get('/admin/loans', [LoanController::class, 'listAll']);
     Route::get('/admin/logs', [AdminController::class, 'getLogs']);
     Route::get('/admin/payouts', [PaymentController::class, 'listWithdrawals']);
