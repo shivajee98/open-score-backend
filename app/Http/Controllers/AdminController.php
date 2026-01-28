@@ -49,17 +49,35 @@ class AdminController extends Controller
             return response()->json(['error' => 'Cannot delete yourself'], 400);
         }
 
-        $user->delete();
+        DB::transaction(function() use ($user) {
+            // Delete associated data to satisfy FK constraints
+            $wallets = \App\Models\Wallet::where('user_id', $user->id)->get();
+            foreach ($wallets as $wallet) {
+                \App\Models\WalletTransaction::where('wallet_id', $wallet->id)->delete();
+                \App\Models\Payment::where('payer_wallet_id', $wallet->id)
+                    ->orWhere('payee_wallet_id', $wallet->id)
+                    ->delete();
+                $wallet->delete();
+            }
+
+            $loans = \App\Models\Loan::where('user_id', $user->id)->get();
+            foreach ($loans as $loan) {
+                \App\Models\LoanRepayment::where('loan_id', $loan->id)->delete();
+                $loan->delete();
+            }
+
+            $user->delete();
+        });
         
         DB::table('admin_logs')->insert([
             'admin_id' => \Illuminate\Support\Facades\Auth::id(),
             'action' => 'delete_user',
-            'description' => "Deleted user {$user->name} ({$user->mobile_number})",
+            'description' => "Deleted user {$user->name} ({$user->mobile_number}) and all associated data.",
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        return response()->json(['message' => 'User deleted successfully']);
+        return response()->json(['message' => 'User and all associated records deleted successfully']);
     }
 
     public function updateStatus(Request $request, $id)

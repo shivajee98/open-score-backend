@@ -66,14 +66,28 @@ class AnalyticsController extends Controller
             'merchants_out' => $flowMerchantOut,
         ];
 
-        // 3. User Growth (Last 6 Months)
+        // 3. User Role Distribution
+        $userDistribution = User::select('role', DB::raw('count(*) as value'))
+            ->groupBy('role')
+            ->get()
+            ->map(function($item) {
+                return ['name' => $item->role, 'value' => $item->value];
+            });
+
+        // 4. Sector-wise Volume
+        $sectorVolume = User::where('role', 'MERCHANT')
+            ->select('business_nature as name', DB::raw('count(*) as value'))
+            ->groupBy('business_nature')
+            ->get();
+
+        // 5. User Growth (Last 6 Months)
         $userGrowth = User::select(DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'), DB::raw('count(*) as count'))
             ->where('created_at', '>=', now()->subMonths(6))
             ->groupBy('month')
             ->orderBy('month')
             ->get();
 
-        // 4. Transaction Volume (Last 30 Days)
+        // 6. Transaction Volume (Last 30 Days)
         $dailyVolume = WalletTransaction::select(DB::raw('DATE(created_at) as date'), DB::raw('sum(amount) as total'))
             ->where('created_at', '>=', now()->subDays(30))
             ->groupBy('date')
@@ -83,6 +97,8 @@ class AnalyticsController extends Controller
         return response()->json([
             'loan_performance' => $loanPerformance,
             'money_flow' => $moneyFlow,
+            'user_distribution' => $userDistribution,
+            'sector_volume' => $sectorVolume,
             'user_growth' => $userGrowth,
             'daily_volume' => $dailyVolume
         ]);
