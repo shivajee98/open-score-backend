@@ -47,6 +47,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/loans/{id}/approve', [LoanController::class, 'approve']);
     Route::post('/admin/loans/{id}/release', [LoanController::class, 'release']);
     Route::get('/admin/loans', [LoanController::class, 'listAll']);
+    Route::get('/admin/loans/history', [LoanController::class, 'listHistory']);
     Route::get('/admin/logs', [AdminController::class, 'getLogs']);
     Route::get('/admin/payouts', [PaymentController::class, 'listWithdrawals']);
     Route::post('/admin/payouts/{id}/approve', [PaymentController::class, 'approveWithdrawal']);

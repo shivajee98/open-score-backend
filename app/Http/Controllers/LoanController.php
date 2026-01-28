@@ -386,4 +386,12 @@ class LoanController extends Controller
         // Include everything that is not yet fully finalized (DISBURSED or REJECTED)
         return response()->json(Loan::with('user')->whereNotIn('status', ['DISBURSED', 'REJECTED'])->orderBy('created_at', 'desc')->get());
     }
+
+    public function listHistory()
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+        return response()->json(Loan::with('user')->whereIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED', 'CLOSED'])->orderBy('created_at', 'desc')->get());
+    }
 }
