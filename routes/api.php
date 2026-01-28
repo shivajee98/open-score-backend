@@ -73,5 +73,17 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/qr/batches', [QrController::class, 'getBatches']);
     Route::get('/admin/qr/batches/{id}', [QrController::class, 'getBatchCodes']);
     
+    // Merchant Cashback Management
+    Route::get('/admin/merchants', [\App\Http\Controllers\MerchantCashbackController::class, 'getMerchants']);
+    Route::get('/admin/merchants/{id}/stats', [\App\Http\Controllers\MerchantCashbackController::class, 'getMerchantStats']);
+    Route::get('/admin/cashback/tiers', [\App\Http\Controllers\MerchantCashbackController::class, 'getTiers']);
+    Route::post('/admin/cashback/tiers', [\App\Http\Controllers\MerchantCashbackController::class, 'updateTier']);
+    Route::put('/admin/cashback/tiers/{id}', [\App\Http\Controllers\MerchantCashbackController::class, 'updateTier']);
+    Route::post('/admin/cashback/award', [\App\Http\Controllers\MerchantCashbackController::class, 'awardCashback']);
+    Route::post('/admin/cashback/bulk-award', [\App\Http\Controllers\MerchantCashbackController::class, 'bulkAwardCashback']);
+    Route::get('/admin/cashback', [\App\Http\Controllers\MerchantCashbackController::class, 'getCashbacks']);
+    Route::post('/admin/cashback/{id}/approve', [\App\Http\Controllers\MerchantCashbackController::class, 'approveCashback']);
+    Route::post('/admin/cashback/{id}/reject', [\App\Http\Controllers\MerchantCashbackController::class, 'rejectCashback']);
+    
     Route::post('/merchant/link-qr', [QrController::class, 'link']);
 });
