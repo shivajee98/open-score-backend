@@ -137,6 +137,19 @@ class LoanController extends Controller
         $loan->status = 'KYC_SENT';
         $loan->save();
 
+        // Reflect loan amount in wallet as LOCKED (PENDING status)
+        $wallet = $this->walletService->getWallet($loan->user_id);
+        if (!$wallet) $wallet = $this->walletService->createWallet($loan->user_id);
+        
+        $this->walletService->credit(
+            $wallet->id, 
+            $loan->amount, 
+            'LOAN', 
+            $loan->id, 
+            "Loan Disbursal (Pending KYC/Final Approval)", 
+            'PENDING'
+        );
+
         return response()->json([
             'loan' => $loan,
             'kyc_link' => env('KYC_FORM_URL', 'https://openscorekyc.galobyte.site') . "/form/{$loan->kyc_token}"
@@ -240,10 +253,8 @@ class LoanController extends Controller
             $loan->disbursed_by = Auth::id();
             $loan->save();
 
-            $wallet = $this->walletService->getWallet($loan->user_id);
-            if (!$wallet) $wallet = $this->walletService->createWallet($loan->user_id);
-            
-            $this->walletService->credit($wallet->id, $loan->amount, 'LOAN', $loan->id, "Loan Disbursed");
+            // Unlock the transaction in the wallet
+            $this->walletService->approveLoanTransaction($loan->id);
 
             // Generate Repayment Schedule
             $this->generateRepaymentSchedule($loan);

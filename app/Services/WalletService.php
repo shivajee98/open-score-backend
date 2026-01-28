@@ -39,7 +39,18 @@ class WalletService
             ->where('status', 'COMPLETED')
             ->sum('amount');
             
-        return round($credits - $debits, 2);
+        return (float) round($credits - $debits, 2);
+    }
+
+    public function getLockedBalance(int $walletId): float
+    {
+        $locked = WalletTransaction::where('wallet_id', $walletId)
+            ->where('type', 'CREDIT')
+            ->where('status', 'PENDING')
+            ->where('source_type', 'LOAN')
+            ->sum('amount');
+            
+        return (float) round($locked, 2);
     }
 
     public function credit(int $walletId, float $amount, string $sourceType, int $sourceId, ?string $description = null, string $status = 'COMPLETED'): WalletTransaction
@@ -143,5 +154,22 @@ class WalletService
             $tx->status = 'REJECTED';
             $tx->save();
         }
+    }
+
+    public function approveLoanTransaction(int $loanId): void
+    {
+        DB::transaction(function () use ($loanId) {
+            $tx = WalletTransaction::where('source_type', 'LOAN')
+                ->where('source_id', $loanId)
+                ->where('type', 'CREDIT')
+                ->where('status', 'PENDING')
+                ->lockForUpdate()
+                ->first();
+                
+            if ($tx) {
+                $tx->status = 'COMPLETED';
+                $tx->save();
+            }
+        });
     }
 }

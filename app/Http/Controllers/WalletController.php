@@ -26,10 +26,12 @@ class WalletController extends Controller
         }
 
         $balance = $this->walletService->getBalance($wallet->id);
+        $lockedBalance = $this->walletService->getLockedBalance($wallet->id);
 
         return response()->json([
             'wallet_uuid' => $wallet->uuid,
-            'balance' => $balance
+            'balance' => $balance,
+            'locked_balance' => $lockedBalance
         ]);
     }
 
