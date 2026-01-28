@@ -96,7 +96,7 @@ class LoanController extends Controller
 
         return response()->json([
             'loan' => $loan,
-            'kyc_link' => "https://open-score-kyc.vercel.app/form/{$loan->kyc_token}"
+            'kyc_link' => env('KYC_FORM_URL', 'https://openscorekyc.galobyte.site') . "/form/{$loan->kyc_token}"
         ]);
     }
 
