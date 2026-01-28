@@ -41,8 +41,7 @@ class AnalyticsController extends Controller
         // 1. LIQUIDITY INTELLIGENCE
         // CRS Calculation (Proxy): (Avg Disbursal to Repayment Time)
         $avgLoanDuration = Loan::where('status', 'CLOSED')
-            ->select(DB::raw('DATEDIFF(updated_at, disbursed_at) as days'))
-            ->avg('days') ?? 30; // Default to 30 if no data
+            ->value(DB::raw('AVG(DATEDIFF(updated_at, disbursed_at))')) ?? 30; // Default to 30 if no data
             
         $liquidityStats = [
             'crs_days' => round($avgLoanDuration, 1),
