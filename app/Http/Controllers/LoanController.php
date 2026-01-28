@@ -319,7 +319,8 @@ class LoanController extends Controller
             ->firstOrFail();
 
         $wallet = $this->walletService->getWallet(Auth::id());
-        if ($wallet->balance < $repayment->amount) {
+        $balance = $this->walletService->getBalance($wallet->id);
+        if ($balance < $repayment->amount) {
             return response()->json(['error' => 'Insufficient balance in wallet'], 400);
         }
 
