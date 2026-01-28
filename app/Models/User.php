@@ -56,4 +56,9 @@ class User extends Authenticatable implements JWTSubject
             'mobile_number' => $this->mobile_number
         ];
     }
+
+    public function wallet()
+    {
+        return $this->hasOne(Wallet::class);
+    }
 }
