@@ -30,15 +30,23 @@ class PaymentController extends Controller
 
     public function findPayee($id)
     {
-        // Check if ID is a VPA
+        $user = null;
+        $wallet = null;
+
         if (str_contains($id, '@openscore')) {
+            // VPA handler
             $mobile = explode('@', $id)[0];
             $user = User::where('mobile_number', $mobile)->first();
-            if (!$user) return response()->json(['error' => 'User not found'], 404);
-            $wallet = Wallet::where('user_id', $user->id)->first();
+        } elseif (is_numeric($id) && strlen($id) >= 10) {
+            // Mobile number handler
+            $user = User::where('mobile_number', $id)->first();
         } else {
             // Assume UUID
             $wallet = Wallet::where('uuid', $id)->first();
+        }
+
+        if (!$wallet && $user) {
+            $wallet = Wallet::where('user_id', $user->id)->first();
         }
 
         if (!$wallet) return response()->json(['error' => 'Payee wallet not found'], 404);
