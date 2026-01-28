@@ -44,8 +44,9 @@ class WalletController extends Controller
             ->paginate(20);
 
         $transactions->getCollection()->transform(function ($tx) {
-            $tx->counterparty_name = 'System';
-            $tx->counterparty_vpa = '';
+            // Default values
+            $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Cashback' : 'OpenScore';
+            $tx->counterparty_vpa = 'System';
 
             if ($tx->source_type === 'QR_PAYMENT' && $tx->source_id) {
                 // source_id is now the Counterparty Wallet ID
@@ -57,7 +58,10 @@ class WalletController extends Controller
                         $tx->counterparty_vpa = $user->mobile_number . '@openscore';
                     }
                 }
+            } elseif ($tx->source_type === 'LOAN') {
+                $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Loan Disbursed' : 'Loan Repayment';
             }
+
             return $tx;
         });
             
