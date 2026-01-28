@@ -30,17 +30,29 @@ class LoanController extends Controller
         ]);
 
         // Restriction: Only one active/pending loan allowed
-        $activeLoan = Loan::where('user_id', Auth::id())
-            ->whereNotIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED'])
-            ->exists();
+        $processingLoan = Loan::where('user_id', Auth::id())
+            ->whereIn('status', ['PENDING', 'PROCEEDED', 'KYC_SENT', 'FORM_SUBMITTED', 'APPROVED', 'PREVIEW'])
+            ->first();
 
-        // Note: Even if it's DISBURSED, if it's not fully paid back, we might want to restrict it.
-        // But the user said "under process", which usually means Pending -> Approved.
-        // However, usually you can't have two loans at once anyway.
-        if ($activeLoan) {
+        if ($processingLoan) {
             return response()->json([
-                'error' => 'Active loan found',
-                'message' => 'You already have a loan application in progress. Please complete or cancel your previous loan before applying for a new one.'
+                'error' => 'Application Under Process',
+                'message' => 'You already have a loan application under process. Please revoke (cancel) your current application if you wish to apply for a new one.'
+            ], 403);
+        }
+
+        // Restriction: Cannot apply within 15 days of a disbursed loan
+        $lastDisbursed = Loan::where('user_id', Auth::id())
+            ->where('status', 'DISBURSED')
+            ->where('disbursed_at', '>', Carbon::now()->subDays(15))
+            ->orderBy('disbursed_at', 'desc')
+            ->first();
+
+        if ($lastDisbursed) {
+            $daysLeft = 15 - Carbon::now()->diffInDays($lastDisbursed->disbursed_at);
+            return response()->json([
+                'error' => 'Wait Period Active',
+                'message' => "Your last loan was disbursed on {$lastDisbursed->disbursed_at->format('d M')}. You can apply for a new loan after 15 days from disbursal (approx. {$daysLeft} days left)."
             ], 403);
         }
         
