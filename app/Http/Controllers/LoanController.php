@@ -32,10 +32,28 @@ class LoanController extends Controller
             'tenure' => $request->tenure,
             'payout_frequency' => $request->payout_frequency,
             'payout_option_id' => $request->payout_option_id,
-            'status' => 'PENDING'
+            'status' => 'PREVIEW'
         ]);
 
         return response()->json($loan, 201);
+    }
+
+    public function confirm(Request $request, $id)
+    {
+        $loan = Loan::findOrFail($id);
+        
+        if ($loan->user_id !== Auth::id()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        if ($loan->status !== 'PREVIEW') {
+            return response()->json(['error' => 'Can only confirm from PREVIEW state'], 400);
+        }
+
+        $loan->status = 'PENDING';
+        $loan->save();
+
+        return response()->json($loan);
     }
 
     public function index()

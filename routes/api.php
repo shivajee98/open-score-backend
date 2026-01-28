@@ -30,6 +30,7 @@ Route::middleware('auth:api')->group(function () {
     // Loan
     Route::post('/loans/apply', [LoanController::class, 'apply']);
     Route::get('/loans', [LoanController::class, 'index']);
+    Route::post('/loans/{id}/confirm', [LoanController::class, 'confirm']);
     Route::post('/loans/{id}/submit-form', [LoanController::class, 'submitForm']);
     
     // Admin
