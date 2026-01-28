@@ -14,6 +14,10 @@ Route::post('/auth/verify', [AuthController::class, 'verifyOtp']);
 Route::get('/payees', [AuthController::class, 'listPayees']);
 Route::get('/merchants', [AuthController::class, 'listPayees']); // Legacy support
 
+// External KYC (Publicly accessible with token)
+Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
+Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
+
 Route::middleware('auth:api')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/onboarding', [AuthController::class, 'completeOnboarding']);
@@ -36,9 +40,6 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/loans/{id}/repayments', [LoanController::class, 'repayments']);
     Route::post('/loans/{id}/submit-form', [LoanController::class, 'submitForm']);
     
-    // External KYC (Publicly accessible with token)
-    Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
-    Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
     
     // Admin
     Route::post('/admin/loans/{id}/proceed', [LoanController::class, 'proceed']);
