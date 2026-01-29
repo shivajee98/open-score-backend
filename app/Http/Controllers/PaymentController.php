@@ -200,4 +200,31 @@ class PaymentController extends Controller
 
         return response()->json(['message' => 'Payout disbursed']);
     }
+
+    public function searchPayee(Request $request)
+    {
+        $query = $request->query('query');
+        if (strlen($query) < 3) return response()->json([]);
+
+        $users = User::where('id', '!=', Auth::id())
+            ->where(function ($q) use ($query) {
+                $q->where('mobile_number', 'LIKE', $query . '%')
+                  ->orWhere('name', 'LIKE', '%' . $query . '%');
+            })
+            ->limit(10)
+            ->get();
+
+        $results = $users->map(function ($p) {
+            $wallet = Wallet::where('user_id', $p->id)->first();
+            return [
+                'name' => $p->name,
+                'role' => $p->role,
+                'wallet_uuid' => $wallet ? $wallet->uuid : null,
+                'vpa' => $p->mobile_number . '@openscore',
+                'id' => $p->mobile_number // Use mobile as ID for frontend search consistency
+            ];
+        });
+
+        return response()->json($results);
+    }
 }

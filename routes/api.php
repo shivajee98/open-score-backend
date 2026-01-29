@@ -56,6 +56,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/payment/qr', [PaymentController::class, 'getMyQr']);
     Route::post('/merchant/withdraw', [PaymentController::class, 'requestWithdrawal']);
     Route::get('/payment/payee/{uuid}', [PaymentController::class, 'findPayee']);
+    Route::get('/payment/search', [PaymentController::class, 'searchPayee']);
     Route::post('/payment/pay', [PaymentController::class, 'pay']);
 
     // Admin User Management
