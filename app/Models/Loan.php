@@ -20,14 +20,16 @@ class Loan extends Model
         'approved_at',
         'approved_by',
         'disbursed_at',
-        'disbursed_by'
+        'disbursed_by',
+        'closed_at'
     ];
 
     protected $casts = [
         'form_data' => 'array',
         'kyc_submitted_at' => 'datetime',
         'approved_at' => 'datetime',
-        'disbursed_at' => 'datetime'
+        'disbursed_at' => 'datetime',
+        'closed_at' => 'datetime'
     ];
 
     protected $appends = ['display_id'];
