@@ -41,9 +41,13 @@ class LoanController extends Controller
             ], 403);
         }
 
-        // Restriction: Cannot have any active (DISBURSED) loan
+        // Restriction: Cannot have any active (DISBURSED) loan that is NOT fully paid
         $activeLoan = Loan::where('user_id', Auth::id())
             ->where('status', 'DISBURSED')
+            ->get()
+            ->filter(function($l) {
+                return (float)$l->paid_amount < (float)$l->amount;
+            })
             ->first();
 
         if ($activeLoan) {
@@ -53,11 +57,16 @@ class LoanController extends Controller
             ], 403);
         }
 
-        // Restriction: Cannot apply within 15 days of a disbursed loan
+        // Restriction: Cannot apply within 15 days of a disbursed loan, UNLESS it's already paid back
         $lastDisbursed = Loan::where('user_id', Auth::id())
             ->where('status', 'DISBURSED')
             ->where('disbursed_at', '>', Carbon::now()->subDays(15))
             ->orderBy('disbursed_at', 'desc')
+            ->get()
+            ->filter(function($l) {
+                // If fully paid, we ignore the wait period
+                return (float)$l->paid_amount < (float)$l->amount;
+            })
             ->first();
 
         if ($lastDisbursed) {
