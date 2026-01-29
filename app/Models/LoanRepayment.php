@@ -14,6 +14,13 @@ class LoanRepayment extends Model
         'status'
     ];
 
+    protected $appends = ['display_id'];
+
+    public function getDisplayIdAttribute()
+    {
+        return 2606900 + $this->id;
+    }
+
     public function loan()
     {
         return $this->belongsTo(Loan::class);

@@ -30,6 +30,13 @@ class Loan extends Model
         'disbursed_at' => 'datetime'
     ];
 
+    protected $appends = ['display_id'];
+
+    public function getDisplayIdAttribute()
+    {
+        return 2606900 + $this->id;
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
