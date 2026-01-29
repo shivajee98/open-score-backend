@@ -297,19 +297,14 @@ class LoanController extends Controller
     private function generateRepaymentSchedule($loan)
     {
         $amount = $loan->amount;
-        $frequency = $loan->payout_frequency; // DAILY, WEEKLY, MONTHLY
+        $frequency = strtoupper($loan->payout_frequency); 
         $tenureMonths = $loan->tenure;
         
-        // Simple logic for interest/fees if already included in total payable
-        // For now, let's assume we recoup the Principal + GST + Fees.
-        // Wait, the user said "Principal = Disbursal", so the repayment is Principal + Fees.
         $processingFee = $loan->amount == 10000 ? 0 : 1200;
         $loginFee = $loan->amount == 10000 ? 300 : 200;
         $fieldKycFee = $loan->amount == 10000 ? 500 : 600;
         $gstAmount = round($loan->amount * 0.18);
         
-        // Re-calculating same way as frontend for consistency
-        $gstAmount = round($loan->amount * 0.18);
         $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount;
         $totalPayable = $loan->amount + $totalFees;
 
@@ -317,15 +312,21 @@ class LoanController extends Controller
         $intervalDays = 0;
 
         if ($frequency === 'DAILY') {
-            $totalEmis = $tenureMonths * 30;
             $intervalDays = 1;
         } elseif ($frequency === 'WEEKLY') {
-            $totalEmis = $tenureMonths * 4;
             $intervalDays = 7;
-        } else { // MONTHLY
-            $totalEmis = $tenureMonths;
+        } elseif ($frequency === 'MONTHLY') {
+            $intervalDays = 30;
+        } elseif (preg_match('/(\d+)\s*DAYS?/', $frequency, $matches)) {
+            $intervalDays = (int)$matches[1];
+        } else {
+            // Default to monthly if unknown
             $intervalDays = 30;
         }
+
+        // Calculate total EMIs based on 30 days per month tenure
+        $totalEmis = floor(($tenureMonths * 30) / $intervalDays);
+        if ($totalEmis <= 0) $totalEmis = 1;
 
         $emiAmount = round($totalPayable / $totalEmis, 2);
         
