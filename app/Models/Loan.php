@@ -21,7 +21,8 @@ class Loan extends Model
         'approved_by',
         'disbursed_at',
         'disbursed_by',
-        'closed_at'
+        'closed_at',
+        'loan_plan_id'
     ];
 
     protected $casts = [
@@ -42,5 +43,10 @@ class Loan extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+    
+    public function plan()
+    {
+        return $this->belongsTo(LoanPlan::class, 'loan_plan_id');
     }
 }

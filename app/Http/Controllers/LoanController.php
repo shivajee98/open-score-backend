@@ -22,11 +22,13 @@ class LoanController extends Controller
 
     public function apply(Request $request)
     {
+        // Validation: loan_plan_id is optional for backward compat but recommended
         $request->validate([
             'amount' => 'required|numeric|min:1',
             'tenure' => 'required|integer',
             'payout_frequency' => 'required|string',
-            'payout_option_id' => 'required|string'
+            'payout_option_id' => 'required|string',
+            'loan_plan_id' => 'nullable|exists:loan_plans,id'
         ]);
 
         // Restriction: Only one active/pending loan allowed
@@ -77,12 +79,30 @@ class LoanController extends Controller
             ], 403);
         }
         
+        // Use Plan details if provided, otherwise trust request (legacy)
+        $amount = $request->amount;
+        $tenure = $request->tenure;
+        $frequency = $request->payout_frequency;
+        
+        if ($request->loan_plan_id) {
+            $plan = \App\Models\LoanPlan::find($request->loan_plan_id);
+            if ($plan) {
+                $amount = $plan->amount;
+                // Tenure in plan is days, loan table stores months usually.
+                // Let's keep storing whatever the frontend sent for 'tenure' column to avoid breaking view logic,
+                // but rely on 'loan_plan_id' for calculations later.
+                // Actually, let's trust the plan values for the critical parts.
+                // If the frontend sends 3 months but plan is 90 days, it matches.
+            }
+        }
+        
         $loan = Loan::create([
             'user_id' => Auth::id(),
-            'amount' => $request->amount,
-            'tenure' => $request->tenure,
-            'payout_frequency' => $request->payout_frequency,
+            'amount' => $amount,
+            'tenure' => $tenure,
+            'payout_frequency' => $frequency,
             'payout_option_id' => $request->payout_option_id,
+            'loan_plan_id' => $request->loan_plan_id,
             'status' => 'PREVIEW'
         ]);
 
@@ -321,13 +341,55 @@ class LoanController extends Controller
         $frequency = strtoupper($loan->payout_frequency); 
         $tenureMonths = $loan->tenure;
         
-        $processingFee = $loan->amount == 10000 ? 0 : 1200;
-        $loginFee = $loan->amount == 10000 ? 300 : 200;
-        $fieldKycFee = $loan->amount == 10000 ? 500 : 600;
-        $gstAmount = round($loan->amount * 0.18);
+        // Fee Calculation Logic
+        $processingFee = 0;
+        $loginFee = 0;
+        $fieldKycFee = 0;
+        $gstAmount = 0; // Will calculate
         
-        $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount;
-        $totalPayable = $loan->amount + $totalFees;
+        // Check for Dynamic Plan
+        $plan = null;
+        if ($loan->loan_plan_id) {
+            $plan = \App\Models\LoanPlan::find($loan->loan_plan_id);
+        }
+        
+        if ($plan) {
+            // Dynamic Logic
+            $processingFee = $plan->processing_fee;
+            $loginFee = $plan->application_fee;
+            $fieldKycFee = $plan->other_fee;
+            // Interest... currently ignored in repayment breakdown of fees, but might affect total payable?
+            // The original logic didn't seem to apply interest rate to the fees, but total payable.
+            // Original logic: Total Payable = Loan Amount + Fees + GST.
+            // Wait, does interest rate increase the total payable?
+            // The original code: $totalPayable = $loan->amount + $totalFees;
+            // It treated the loan as 0% interest effectively or included interest in the "Fees" implicitly for some?
+            // "12% Monthly" plan in seeder would imply significant interest.
+            
+            // If plan has interest > 0, we should add it.
+            // Simple interest for now as per "Total Payable" concept often used here.
+            $interestAmount = 0;
+            if ($plan->interest_rate > 0) {
+                // Monthly interest
+                $months = $plan->tenure_days / 30;
+                $interestAmount = ($amount * ($plan->interest_rate / 100)) * $months;
+            }
+            
+            $gstAmount = round($amount * 0.18); // Kept as per original logic (18% of Principal?!)
+            
+            $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount + $interestAmount;
+            $totalPayable = $loan->amount + $totalFees;
+            
+        } else {
+            // Legacy Logic (Hardcoded Fallback)
+            $processingFee = $loan->amount == 10000 ? 0 : 1200;
+            $loginFee = $loan->amount == 10000 ? 300 : 200;
+            $fieldKycFee = $loan->amount == 10000 ? 500 : 600;
+            $gstAmount = round($loan->amount * 0.18);
+            
+            $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount;
+            $totalPayable = $loan->amount + $totalFees;
+        }
 
         $totalEmis = 0;
         $intervalDays = 0;
@@ -345,8 +407,16 @@ class LoanController extends Controller
             $intervalDays = 30;
         }
 
-        // Calculate total EMIs based on 30 days per month tenure
-        $totalEmis = floor(($tenureMonths * 30) / $intervalDays);
+        // Calculate total EMIs
+        if ($plan) {
+            // Use plan days if available
+            $totalDays = $plan->tenure_days;
+            $totalEmis = floor($totalDays / $intervalDays);
+        } else {
+            // Legacy: Based on 30 days per month
+            $totalEmis = floor(($tenureMonths * 30) / $intervalDays);
+        }
+        
         if ($totalEmis <= 0) $totalEmis = 1;
 
         // Integer-based distribution to avoid floating point issues

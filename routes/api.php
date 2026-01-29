@@ -93,4 +93,11 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/cashback/{id}/reject', [\App\Http\Controllers\MerchantCashbackController::class, 'rejectCashback']);
     
     Route::post('/merchant/link-qr', [QrController::class, 'link']);
+    
+    // Loan Plans
+    Route::get('/loan-plans', [\App\Http\Controllers\LoanPlanController::class, 'index']); // Public (Auth req)
+    Route::get('/admin/loan-plans', [\App\Http\Controllers\LoanPlanController::class, 'adminIndex']);
+    Route::post('/admin/loan-plans', [\App\Http\Controllers\LoanPlanController::class, 'store']);
+    Route::put('/admin/loan-plans/{id}', [\App\Http\Controllers\LoanPlanController::class, 'update']);
+    Route::delete('/admin/loan-plans/{id}', [\App\Http\Controllers\LoanPlanController::class, 'destroy']);
 });
