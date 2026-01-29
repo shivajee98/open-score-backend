@@ -328,12 +328,17 @@ class LoanController extends Controller
         $totalEmis = floor(($tenureMonths * 30) / $intervalDays);
         if ($totalEmis <= 0) $totalEmis = 1;
 
-        $emiAmount = round($totalPayable / $totalEmis, 2);
-        
+        // Integer-based distribution to avoid floating point issues
+        $baseEmi = floor($totalPayable / $totalEmis);
+        $remainder = $totalPayable % $totalEmis;
+
         for ($i = 1; $i <= $totalEmis; $i++) {
+            // Add +1 to the first N installments where N is the remainder
+            $currentEmiAmount = $baseEmi + ($i <= $remainder ? 1 : 0);
+
             LoanRepayment::create([
                 'loan_id' => $loan->id,
-                'amount' => $emiAmount,
+                'amount' => $currentEmiAmount,
                 'due_date' => Carbon::now()->addDays($i * $intervalDays)->toDateString(),
                 'status' => 'PENDING'
             ]);
