@@ -110,11 +110,17 @@ class WalletService
                 throw new Exception("Wallet not found.");
             }
 
+            // Fetch User Names for better descriptions
+            $payer = \App\Models\User::find($payerUserId);
+            $payee = \App\Models\User::find($payeeUserId);
+            $payerName = $payer ? $payer->name : "User #{$payerUserId}";
+            $payeeName = $payee ? $payee->name : "User #{$payeeUserId}";
+
             // Debit Payer (Source = Payee Wallet)
-            $this->debit($payerWallet->id, $amount, 'QR_PAYMENT', $payeeWallet->id, "Payment to User ID: {$payeeUserId}. Ref: {$reference}");
+            $this->debit($payerWallet->id, $amount, 'QR_PAYMENT', $payeeWallet->id, "Payment to {$payeeName}. Ref: {$reference}");
 
             // Credit Payee (Source = Payer Wallet)
-            $this->credit($payeeWallet->id, $amount, 'QR_PAYMENT', $payerWallet->id, "Payment from User ID: {$payerUserId}. Ref: {$reference}");
+            $this->credit($payeeWallet->id, $amount, 'QR_PAYMENT', $payerWallet->id, "Payment from {$payerName}. Ref: {$reference}");
         });
     }
 
