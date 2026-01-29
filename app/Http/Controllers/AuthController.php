@@ -150,8 +150,7 @@ class AuthController extends Controller
         }
 
         if ($request->pin) {
-            $wallet->pin = bcrypt($request->pin);
-            $wallet->save();
+            $walletService->setPin($wallet->id, $request->pin);
         }
 
         // Credit 250 Bonus (Check if already credited?)
