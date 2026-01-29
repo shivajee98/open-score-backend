@@ -213,6 +213,17 @@ class LoanController extends Controller
             return response()->json(['error' => 'Already submitted'], 400);
         }
 
+        // Save bank details to User table
+        $user = \App\Models\User::find($loan->user_id);
+        if ($user) {
+            $user->update($request->only([
+                'bank_name', 
+                'ifsc_code', 
+                'account_holder_name', 
+                'account_number'
+            ]));
+        }
+
         $loan->form_data = array_merge($loan->form_data ?? [], $request->all());
         $loan->status = 'FORM_SUBMITTED';
         $loan->kyc_submitted_at = now();

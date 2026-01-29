@@ -25,7 +25,11 @@ class User extends Authenticatable implements JWTSubject
         'daily_turnover',
         'business_address',
         'otp',
-        'otp_expires_at'
+        'otp_expires_at',
+        'bank_name',
+        'ifsc_code',
+        'account_holder_name',
+        'account_number'
     ];
 
     protected $hidden = [
