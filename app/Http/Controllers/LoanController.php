@@ -41,6 +41,18 @@ class LoanController extends Controller
             ], 403);
         }
 
+        // Restriction: Cannot have any active (DISBURSED) loan
+        $activeLoan = Loan::where('user_id', Auth::id())
+            ->where('status', 'DISBURSED')
+            ->first();
+
+        if ($activeLoan) {
+             return response()->json([
+                'error' => 'Active Loan Exists',
+                'message' => 'You already have an active loan. Please repay it fully to apply for a new one.'
+            ], 403);
+        }
+
         // Restriction: Cannot apply within 15 days of a disbursed loan
         $lastDisbursed = Loan::where('user_id', Auth::id())
             ->where('status', 'DISBURSED')
@@ -390,6 +402,17 @@ class LoanController extends Controller
             $repayment->save();
 
             $loan->increment('paid_amount', $repayment->amount);
+            
+            // Check if all repayments are completed
+            $pendingCount = LoanRepayment::where('loan_id', $loan->id)
+                ->where('status', 'PENDING')
+                ->count();
+                
+            if ($pendingCount === 0) {
+                $loan->status = 'CLOSED';
+                $loan->closed_at = now();
+                $loan->save();
+            }
         });
 
         return response()->json(['message' => 'Repayment successful', 'repayment' => $repayment, 'ref' => 'REPAY-' . strtoupper(Str::random(10))]);
