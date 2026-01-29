@@ -44,8 +44,16 @@ class PaymentController extends Controller
             // Email handler
             $user = User::where('email', $id)->first();
         } else {
-            // Assume UUID
+            // Assume UUID (Wallet or Physical QR)
             $wallet = Wallet::where('uuid', $id)->first();
+            
+            if (!$wallet) {
+                // Check if it's a mapped physical QR
+                $qrCode = DB::table('qr_codes')->where('code', $id)->where('status', 'assigned')->first();
+                if ($qrCode) {
+                    $user = User::find($qrCode->user_id);
+                }
+            }
         }
 
         if (!$wallet && $user) {
