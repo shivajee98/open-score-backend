@@ -20,7 +20,9 @@ class AnalyticsController extends Controller
         $totalRepaid = LoanRepayment::where('status', 'PAID')->sum('amount');
         
         $activeLoansCount = Loan::whereIn('status', ['DISBURSED', 'APPROVED'])->count();
-        $completedLoansCount = Loan::where('status', 'CLOSED')->count(); // Assuming CLOSED status exists or we check repayments
+        $completedLoansCount = Loan::where('status', 'CLOSED')->count(); 
+        $defaultedLoansCount = Loan::where('status', 'DEFAULTED')->count();
+        $pendingLoansCount = Loan::whereIn('status', ['PENDING', 'PROCEEDED', 'KYC_SENT', 'FORM_SUBMITTED'])->count();
         
         // Money Flow High Level
         $totalMerchantTransfer = WalletTransaction::where('source_type', 'QR_PAYMENT')->sum('amount');
@@ -30,6 +32,8 @@ class AnalyticsController extends Controller
             'total_repaid' => $totalRepaid,
             'active_loans' => $activeLoansCount,
             'completed_loans' => $completedLoansCount,
+            'defaulted_loans' => $defaultedLoansCount,
+            'pending_loans' => $pendingLoansCount,
             'total_merchant_volume' => $totalMerchantTransfer,
             'total_users' => User::where('role', 'CUSTOMER')->count(),
             'total_merchants' => User::where('role', 'MERCHANT')->count(),

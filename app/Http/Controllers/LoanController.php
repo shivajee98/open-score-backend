@@ -87,12 +87,32 @@ class LoanController extends Controller
         if ($request->loan_plan_id) {
             $plan = \App\Models\LoanPlan::find($request->loan_plan_id);
             if ($plan) {
-                $amount = $plan->amount;
-                // Tenure in plan is days, loan table stores months usually.
-                // Let's keep storing whatever the frontend sent for 'tenure' column to avoid breaking view logic,
-                // but rely on 'loan_plan_id' for calculations later.
-                // Actually, let's trust the plan values for the critical parts.
-                // If the frontend sends 3 months but plan is 90 days, it matches.
+                // Find matching configuration for the requested tenure
+                // Request tenure is in months (approx), Config is in days.
+                $targetDays = $request->tenure * 30; // Approx
+                
+                $config = null;
+                if ($plan->configurations) {
+                    foreach ($plan->configurations as $conf) {
+                        // Allow some flexibility (e.g. 90 days vs 3 months)
+                        if (abs($conf['tenure_days'] - $targetDays) <= 5) {
+                            $config = $conf;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$config) {
+                     return response()->json(['error' => 'Invalid Tenure', 'message' => 'Selected tenure is not available for this plan.'], 400);
+                }
+
+                $amount = $plan->amount; // Base amount
+                
+                // Validate Frequency against the CONFIG's allowed frequencies
+                $allowed = $config['allowed_frequencies'] ?? [];
+                if (!in_array($request->payout_frequency, $allowed)) {
+                     return response()->json(['error' => 'Invalid Frequency', 'message' => "This tenure option supports: " . implode(', ', $allowed)], 400);
+                }
             }
         }
         
@@ -354,31 +374,45 @@ class LoanController extends Controller
         }
         
         if ($plan) {
-            // Dynamic Logic
-            $processingFee = $plan->processing_fee;
-            $loginFee = $plan->application_fee;
-            $fieldKycFee = $plan->other_fee;
-            // Interest... currently ignored in repayment breakdown of fees, but might affect total payable?
-            // The original logic didn't seem to apply interest rate to the fees, but total payable.
-            // Original logic: Total Payable = Loan Amount + Fees + GST.
-            // Wait, does interest rate increase the total payable?
-            // The original code: $totalPayable = $loan->amount + $totalFees;
-            // It treated the loan as 0% interest effectively or included interest in the "Fees" implicitly for some?
-            // "12% Monthly" plan in seeder would imply significant interest.
-            
-            // If plan has interest > 0, we should add it.
-            // Simple interest for now as per "Total Payable" concept often used here.
-            $interestAmount = 0;
-            if ($plan->interest_rate > 0) {
-                // Monthly interest
-                $months = $plan->tenure_days / 30;
-                $interestAmount = ($amount * ($plan->interest_rate / 100)) * $months;
+            $targetDays = $loan->tenure * 30;
+            $config = null;
+            if ($plan->configurations) {
+                foreach ($plan->configurations as $conf) {
+                    if (abs($conf['tenure_days'] - $targetDays) <= 5) {
+                        $config = $conf;
+                        break;
+                    }
+                }
             }
-            
-            $gstAmount = round($amount * 0.18); // Kept as per original logic (18% of Principal?!)
-            
-            $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount + $interestAmount;
-            $totalPayable = $loan->amount + $totalFees;
+
+            if ($config) {
+                // Dynamic Fees from JSON
+                $fees = $config['fees'] ?? [];
+                foreach ($fees as $fee) {
+                    // We sum up all fees for now into a generic pile, or map them?
+                    // The logic below just sums them.
+                    $processingFee += $fee['amount']; 
+                    // Note: original logic had separte fields. Now we just care about total payable?
+                    // Or do we need to store them separately? 
+                    // For now, let's just add to total fees.
+                }
+                
+                // Interest
+                $interestAmount = 0;
+                if (($config['interest_rate'] ?? 0) > 0) {
+                     $months = $config['tenure_days'] / 30;
+                     $interestAmount = ($amount * ($config['interest_rate'] / 100)) * $months;
+                }
+                
+                $gstAmount = round($amount * 0.18); // Keep 18% rule?
+                
+                $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount + $interestAmount;
+                $totalPayable = $loan->amount + $totalFees;
+
+            } else {
+                 // Fallback if config not found (shouldn't happen if validated)
+                 $totalPayable = $loan->amount; // Risk!
+            }
             
         } else {
             // Legacy Logic (Hardcoded Fallback)

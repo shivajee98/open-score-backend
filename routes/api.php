@@ -100,4 +100,6 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/loan-plans', [\App\Http\Controllers\LoanPlanController::class, 'store']);
     Route::put('/admin/loan-plans/{id}', [\App\Http\Controllers\LoanPlanController::class, 'update']);
     Route::delete('/admin/loan-plans/{id}', [\App\Http\Controllers\LoanPlanController::class, 'destroy']);
+    Route::post('/admin/loan-plans/{id}/restore', [\App\Http\Controllers\LoanPlanController::class, 'restore']);
+    Route::get('/admin/loan-plans/{id}/insights', [\App\Http\Controllers\LoanPlanController::class, 'showInsights']);
 });

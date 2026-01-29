@@ -3,19 +3,16 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class LoanPlan extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'name',
         'amount',
-        'tenure_days',
-        'interest_rate',
-        'processing_fee',
-        'application_fee',
-        'other_fee',
-        'repayment_frequency',
-        'cashback_amount',
+        'configurations', // JSON: tenure, rate, fees, frequencies, cashback
         'plan_color',
         'tag_text',
         'is_active',
@@ -24,11 +21,6 @@ class LoanPlan extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'amount' => 'decimal:2',
-        'interest_rate' => 'decimal:2',
-        'processing_fee' => 'decimal:2',
-        'application_fee' => 'decimal:2',
-        'other_fee' => 'decimal:2',
-        'cashback_amount' => 'decimal:2',
-        'tenure_days' => 'integer',
+        'configurations' => 'array',
     ];
 }
