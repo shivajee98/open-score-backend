@@ -51,28 +51,47 @@ class MerchantCashbackController extends Controller
 
         $merchants = $query->paginate($request->get('per_page', 50));
 
-        // Enhance with calculated turnover
-        $merchants->getCollection()->transform(function ($merchant) {
-            // Calculate actual daily turnover from transactions
-            $wallet = $merchant->wallet;
-            if ($wallet) {
-                $todayTurnover = WalletTransaction::where('wallet_id', $wallet->id)
-                    ->where('type', 'CREDIT')
-                    ->where('source_type', 'QR_PAYMENT')
-                    ->whereDate('created_at', today())
-                    ->sum('amount');
-                
-                $merchant->calculated_daily_turnover = $todayTurnover;
-            } else {
-                $merchant->calculated_daily_turnover = 0;
-            }
+        // Optimizing with batch queries
+        $merchantIds = $merchants->pluck('id')->toArray();
+        $walletIds = $merchants->pluck('wallet.id')->filter()->toArray();
+        
+        // 1. Batch Calculate Today's Turnover
+        $turnovers = [];
+        if (!empty($walletIds)) {
+            $turnovers = WalletTransaction::whereIn('wallet_id', $walletIds)
+                ->where('type', 'CREDIT')
+                ->where('source_type', 'QR_PAYMENT')
+                ->whereDate('created_at', today())
+                ->selectRaw('wallet_id, SUM(amount) as total')
+                ->groupBy('wallet_id')
+                ->pluck('total', 'wallet_id')
+                ->toArray();
+        }
 
-            // Get latest cashback
-            $latestCashback = MerchantCashback::where('merchant_id', $merchant->id)
-                ->orderBy('created_at', 'desc')
-                ->first();
-            
-            $merchant->latest_cashback = $latestCashback;
+        // 2. Batch Fetch Latest Cashback
+        // Technique: Subquery to get latest ID per merchant, then fetch objects
+        // Or simpler for 50 items: Fetch all cashbacks for these merchants, ordered by date, then group by merchant in PHP (if data volume isn't huge per merchant)
+        // Better: Use a subquery to get max created_at per merchant
+        $latestCashbacks = [];
+        if (!empty($merchantIds)) {
+             // Efficient "Latest of Many" via subquery
+             $latestIds = MerchantCashback::selectRaw('MAX(id) as id')
+                 ->whereIn('merchant_id', $merchantIds)
+                 ->groupBy('merchant_id')
+                 ->pluck('id');
+             
+             if ($latestIds->isNotEmpty()) {
+                 $latestCashbacks = MerchantCashback::whereIn('id', $latestIds)
+                    ->get()
+                    ->keyBy('merchant_id');
+             }
+        }
+
+        $merchants->getCollection()->transform(function ($merchant) use ($turnovers, $latestCashbacks) {
+            // Map batch results
+            $walletId = $merchant->wallet ? $merchant->wallet->id : null;
+            $merchant->calculated_daily_turnover = $walletId ? ($turnovers[$walletId] ?? 0) : 0;
+            $merchant->latest_cashback = $latestCashbacks[$merchant->id] ?? null;
 
             return $merchant;
         });

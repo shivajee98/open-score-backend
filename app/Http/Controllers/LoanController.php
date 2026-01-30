@@ -87,6 +87,35 @@ class LoanController extends Controller
         if ($request->loan_plan_id) {
             $plan = \App\Models\LoanPlan::find($request->loan_plan_id);
             if ($plan) {
+                // Progressive Unlocking Logic for loans > 50,000
+                if ((float)$plan->amount > 50000) {
+                    $allPlans = \App\Models\LoanPlan::orderBy('amount', 'asc')->get();
+                    $currentIndex = $allPlans->search(fn($p) => $p->id == $plan->id);
+                    
+                    if ($currentIndex > 0) {
+                        $prevPlan = $allPlans[$currentIndex - 1];
+                        
+                        // Check if user has a CLOSED loan OR fully paid DISBURSED loan for the previous amount
+                        $hasClosedPrev = Loan::where('user_id', Auth::id())
+                            ->where(function($q) {
+                                $q->where('status', 'CLOSED')
+                                  ->orWhere(function($sq) {
+                                      $sq->where('status', 'DISBURSED')
+                                         ->whereColumn('paid_amount', '>=', 'amount');
+                                  });
+                            })
+                            ->where('amount', $prevPlan->amount)
+                            ->exists();
+                            
+                        if (!$hasClosedPrev) {
+                            return response()->json([
+                                'error' => 'Eligibility Required',
+                                'message' => "You're currently not eligible for the ₹" . number_format($plan->amount) . " loan. Please build your eligibility by successfully repaying your previous ₹" . number_format($prevPlan->amount) . " loan."
+                            ], 403);
+                        }
+                    }
+                }
+
                 // Find matching configuration for the requested tenure
                 // Request tenure is in months (approx), Config is in days.
                 $targetDays = $request->tenure * 30; // Approx
@@ -163,12 +192,15 @@ class LoanController extends Controller
         $loan->status = 'CANCELLED';
         $loan->save();
 
+        // Cleanup pending wallet transaction if any
+        $this->walletService->rejectLoanTransaction($loan->id);
+
         return response()->json(['message' => 'Loan application cancelled successfully']);
     }
 
     public function index()
     {
-        return response()->json(Loan::where('user_id', Auth::id())->orderBy('created_at', 'desc')->get());
+        return response()->json(Loan::with('plan')->where('user_id', Auth::id())->orderBy('created_at', 'desc')->get());
     }
 
     public function proceed(Request $request, $id)

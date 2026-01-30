@@ -102,4 +102,5 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/admin/loan-plans/{id}', [\App\Http\Controllers\LoanPlanController::class, 'destroy']);
     Route::post('/admin/loan-plans/{id}/restore', [\App\Http\Controllers\LoanPlanController::class, 'restore']);
     Route::get('/admin/loan-plans/{id}/insights', [\App\Http\Controllers\LoanPlanController::class, 'showInsights']);
+    Route::get('/admin/users/targetable', [AdminController::class, 'getTargetableUsers']);
 });

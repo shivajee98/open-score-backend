@@ -178,4 +178,21 @@ class WalletService
             }
         });
     }
+
+    public function rejectLoanTransaction(int $loanId): void
+    {
+        DB::transaction(function () use ($loanId) {
+            $tx = WalletTransaction::where('source_type', 'LOAN')
+                ->where('source_id', $loanId)
+                ->where('type', 'CREDIT')
+                ->where('status', 'PENDING')
+                ->lockForUpdate()
+                ->first();
+                
+            if ($tx) {
+                $tx->status = 'REJECTED';
+                $tx->save();
+            }
+        });
+    }
 }

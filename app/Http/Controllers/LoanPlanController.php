@@ -13,7 +13,15 @@ class LoanPlanController extends Controller
      */
     public function index()
     {
-        return response()->json(LoanPlan::where('is_active', true)->get());
+        $userId = Auth::id();
+        return response()->json(
+            LoanPlan::where('is_active', true)
+                ->where(function($q) use ($userId) {
+                    $q->where('is_public', true)
+                      ->orWhereHas('users', fn($uq) => $uq->where('users.id', $userId));
+                })
+                ->get()
+        );
     }
 
     /**
@@ -106,6 +114,11 @@ class LoanPlanController extends Controller
         ]);
 
         $plan = LoanPlan::create($request->all());
+
+        if (!$request->is_public && $request->has('assigned_user_ids')) {
+            $plan->users()->sync($request->assigned_user_ids);
+        }
+
         return response()->json($plan, 201);
     }
 
@@ -120,6 +133,12 @@ class LoanPlanController extends Controller
 
         $plan = LoanPlan::findOrFail($id);
         $plan->update($request->all());
+
+        if (array_key_exists('is_public', $request->all()) && !$request->is_public && $request->has('assigned_user_ids')) {
+            $plan->users()->sync($request->assigned_user_ids);
+        } elseif ($request->is_public) {
+            $plan->users()->detach(); // If turned public, remove specific assignments
+        }
 
         return response()->json($plan);
     }

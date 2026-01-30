@@ -16,11 +16,30 @@ class LoanPlan extends Model
         'plan_color',
         'tag_text',
         'is_active',
+        'is_public',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_public' => 'boolean',
         'amount' => 'decimal:2',
         'configurations' => 'array',
     ];
+
+    protected $appends = ['assigned_user_ids'];
+
+    public function getAssignedUserIdsAttribute()
+    {
+        return $this->users()->pluck('users.id')->toArray();
+    }
+
+    public function loans()
+    {
+        return $this->hasMany(Loan::class);
+    }
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'loan_plan_user');
+    }
 }
