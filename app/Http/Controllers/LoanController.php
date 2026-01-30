@@ -156,12 +156,14 @@ class LoanController extends Controller
             'status' => 'PREVIEW'
         ]);
 
+        $loan->load('plan');
+
         return response()->json($loan, 201);
     }
 
     public function confirm(Request $request, $id)
     {
-        $loan = Loan::findOrFail($id);
+        $loan = Loan::with('plan')->findOrFail($id);
         
         if ($loan->user_id !== Auth::id()) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -179,7 +181,7 @@ class LoanController extends Controller
 
     public function cancel(Request $request, $id)
     {
-        $loan = Loan::findOrFail($id);
+        $loan = Loan::with('plan')->findOrFail($id);
 
         if ($loan->user_id !== Auth::id()) {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -210,7 +212,7 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $loan = Loan::findOrFail($id);
+        $loan = Loan::with('plan')->findOrFail($id);
         if ($loan->status !== 'PENDING') {
             return response()->json(['error' => 'Can only proceed from PENDING state'], 400);
         }
@@ -227,7 +229,7 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $loan = Loan::findOrFail($id);
+        $loan = Loan::with('plan')->findOrFail($id);
         
         // Allow sending KYC if PROCEEDED (first time), KYC_SENT (resending), or FORM_SUBMITTED (resending after submission)
         if (!in_array($loan->status, ['PROCEEDED', 'KYC_SENT', 'FORM_SUBMITTED'])) {
@@ -264,7 +266,7 @@ class LoanController extends Controller
 
     public function submitForm(Request $request, $id)
     {
-        $loan = Loan::findOrFail($id);
+        $loan = Loan::with('plan')->findOrFail($id);
         
         // Ensure only the owner can submit the form
         if ($loan->user_id !== Auth::id()) {
@@ -332,7 +334,7 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $loan = Loan::findOrFail($id);
+        $loan = Loan::with('plan')->findOrFail($id);
         if ($loan->status !== 'FORM_SUBMITTED') {
             return response()->json(['error' => 'Loan must have submitted form before approval'], 400);
         }
@@ -359,7 +361,7 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $loan = Loan::findOrFail($id);
+        $loan = Loan::with('plan')->findOrFail($id);
         if ($loan->status !== 'APPROVED') {
             return response()->json(['error' => 'Loan must be approved before releasing funds'], 400);
         }
@@ -571,7 +573,7 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
         // Include everything that is not yet fully finalized (DISBURSED or REJECTED)
-        return response()->json(Loan::with('user')->whereNotIn('status', ['DISBURSED', 'REJECTED'])->orderBy('created_at', 'desc')->get());
+        return response()->json(Loan::with(['user', 'plan'])->whereNotIn('status', ['DISBURSED', 'REJECTED'])->orderBy('created_at', 'desc')->get());
     }
 
     public function listHistory()
@@ -579,6 +581,6 @@ class LoanController extends Controller
         if (Auth::user()->role !== 'ADMIN') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
-        return response()->json(Loan::with('user')->whereIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED', 'CLOSED'])->orderBy('created_at', 'desc')->get());
+        return response()->json(Loan::with(['user', 'plan'])->whereIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED', 'CLOSED'])->orderBy('created_at', 'desc')->get());
     }
 }
