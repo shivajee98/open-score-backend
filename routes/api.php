@@ -106,4 +106,14 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/loan-plans/{id}/restore', [\App\Http\Controllers\LoanPlanController::class, 'restore']);
     Route::get('/admin/loan-plans/{id}/insights', [\App\Http\Controllers\LoanPlanController::class, 'showInsights']);
     Route::get('/admin/users/targetable', [AdminController::class, 'getTargetableUsers']);
+    
+    // Support System
+    Route::get('/support/tickets', [SupportController::class, 'index']);
+    Route::post('/support/tickets', [SupportController::class, 'store']);
+    Route::get('/support/tickets/{id}', [SupportController::class, 'show']);
+    Route::post('/support/tickets/{id}/message', [SupportController::class, 'sendMessage']);
+    Route::put('/support/tickets/{id}/status', [SupportController::class, 'updateStatus']);
+    
+    // Admin Support Logic
+    Route::get('/admin/support/tickets', [SupportController::class, 'adminIndex']);
 });

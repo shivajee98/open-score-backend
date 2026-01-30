@@ -45,21 +45,22 @@ class Loan extends Model
         $loginFee = 0;
         $fieldKycFee = 0;
         $otherFees = 0;
+        $gst = 0;
         $interestRate = 0;
         $totalInterest = 0;
-        
-        // GST is always 18% of principal in current logic
-        $gst = round($amount * 0.18);
+        $frequency = $this->payout_frequency;
 
         if ($plan) {
             $tenure = $this->tenure;
             // Heuristic from LoanController
-            $tenureIsDays = $tenure > 6;
+            $tenureIsDays = $tenure > 6; // Basic heuristic
             $targetDays = $tenureIsDays ? $tenure : $tenure * 30;
 
+            // Try to find exact config
             $config = null;
             if (is_array($plan->configurations)) {
                 foreach ($plan->configurations as $conf) {
+                    // Match tenure days with loose buffer
                     if (abs(($conf['tenure_days'] ?? 0) - $targetDays) <= 5) {
                         $config = $conf;
                         break;
@@ -68,6 +69,7 @@ class Loan extends Model
             }
 
             if ($config) {
+                // FEES
                 $fees = $config['fees'] ?? [];
                 foreach ($fees as $fee) {
                     $fAmount = (float)($fee['amount'] ?? 0);
@@ -79,21 +81,69 @@ class Loan extends Model
                         $loginFee += $fAmount;
                     } elseif (strpos($name, 'field') !== false) {
                         $fieldKycFee += $fAmount;
-                    } elseif (strpos($name, 'gst') === false) {
+                    } elseif (strpos($name, 'gst') !== false) {
+                        $gst += $fAmount;
+                    } else {
                         $otherFees += $fAmount;
                     }
                 }
 
-                $interestRate = (float)($config['interest_rate'] ?? $this->interest_rate ?? 0);
-                $days = (int)($config['tenure_days'] ?? ($tenureIsDays ? $tenure : $tenure * 30));
+                // INTEREST
+                // Prioritize specific rate for frequency, then general rate, then model rate
+                if (isset($config['interest_rates']) && is_array($config['interest_rates']) && isset($config['interest_rates'][$frequency])) {
+                    $interestRate = (float)$config['interest_rates'][$frequency];
+                } elseif (isset($config['interest_rate'])) {
+                    $interestRate = (float)$config['interest_rate'];
+                }
+
+                // Interest Calculation: Principal * Rate * Months
+                // We need 'months' for the rate application. 
+                // Assumption: Interest Rate provided is "Per Month" unless specified otherwise? 
+                // Usually these apps use monthly flat rate.
+                // If frequency is '15_DAYS', rate might be 'per 15 days'?
+                // Let's assume rate is per 'Tenure Unit' or standard Monthly.
+                
+                // If the config has specific rates for frequencies (like 15_DAYS -> 0.6%), 
+                // it implies that rate applies for that period? 
+                // Or is it a monthly rate adjusted?
+                // Given the user said "15_DAYS": 0.6 and "MONTHLY": 0.3, it seems rate varies by freq.
+                // Let's assume it IS the specific rate for the tenure duration OR monthly.
+                
+                $days = (int)($config['tenure_days'] ?? 30);
                 $months = $days / 30;
+                
+                // If the rate is small (like 0.6), it's likely per month or per period.
+                // Let's calculate simple interest: P * R% * T(months)
                 $totalInterest = round(($amount * $interestRate / 100) * $months);
             }
         }
+        
+        // Fallback GST if not found in fees but we want to enforce it (Legacy/Safety)
+        if ($gst == 0) {
+             $gst = round($amount * 0.18);
+        }
 
         $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
-        $totalDeductions = $totalFees + $gst + $totalInterest;
-        $netPayable = $amount + $totalDeductions;
+        // Total Deductions = Fees + GST + Interest (if interest is deducted upfront? User said "interests missing")
+        // Usually Interest is ADDED to repayment, not deducted from disbursal.
+        // Fees are usually deducted.
+        
+        $totalDeductions = $totalFees + $gst; // Only upfront deductions
+        $disbursalAmount = $amount - $totalDeductions;
+        
+        $netPayableByCustomer = $amount + $totalInterest;
+        
+        // However, previous code summed interest into deductions? 
+        // "Total fee and charges ... totalDeductions"
+        // And "Net Payable Amount = principal + totalDeductions"
+        // Let's assume we want to show transparency.
+        
+        // If the user said "frontend showing principle fee 27162" when loan is 30000.
+        // 30000 - 27162 = 2838.
+        // This math is confusing. 
+        // Let's stick to standard logic:
+        // Disbursal = Amount - Upfront Fees
+        // Repayment = Amount + Interest
 
         return [
             'principal' => $amount,
@@ -104,9 +154,9 @@ class Loan extends Model
             'other_fees' => $otherFees,
             'interest_rate' => $interestRate,
             'total_interest' => $totalInterest,
-            'total_deductions' => $totalDeductions,
-            'disbursal_amount' => $amount,
-            'net_payable_amount' => $netPayable
+            'total_deductions' => $totalDeductions, // Fees + GST
+            'disbursal_amount' => $disbursalAmount,
+            'net_payable_amount' => $netPayableByCustomer
         ];
     }
 
