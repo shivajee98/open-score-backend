@@ -75,6 +75,9 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/funds/{id}/approve', [AdminController::class, 'approveFund']);
     Route::post('/admin/funds/{id}/reject', [AdminController::class, 'rejectFund']);
 
+    // Admin Payouts
+    Route::post('/admin/payouts/{id}/reject', [PaymentController::class, 'rejectWithdrawal']);
+
     // QR Codes
     Route::post('/admin/qr/generate', [QrController::class, 'generate']);
     Route::get('/admin/qr/batches', [QrController::class, 'getBatches']);

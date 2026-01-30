@@ -140,14 +140,18 @@ class PaymentController extends Controller
 
     public function requestWithdrawal(Request $request)
     {
-        $request->validate(['amount' => 'required|numeric|min:1']);
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'bank_name' => 'required|string',
+            'account_number' => 'required|string',
+            'ifsc_code' => 'required|string',
+            'account_holder_name' => 'required|string',
+        ]);
         
-        $merchant = Auth::user();
-        if ($merchant->role !== 'MERCHANT') {
-            return response()->json(['error' => 'Only merchants can withdraw'], 403);
-        }
-
-        $wallet = $this->walletService->getWallet($merchant->id);
+        $user = Auth::user();
+        $wallet = $this->walletService->getWallet($user->id);
+        if (!$wallet) $wallet = $this->walletService->createWallet($user->id);
+        
         $balance = $this->walletService->getBalance($wallet->id);
 
         if ($balance < $request->amount) {
@@ -155,9 +159,14 @@ class PaymentController extends Controller
         }
 
         $withdraw = \App\Models\WithdrawRequest::create([
-            'user_id' => $merchant->id,
+            'user_id' => $user->id,
+            'wallet_id' => $wallet->id,
             'amount' => $request->amount,
-            'status' => 'PENDING'
+            'status' => 'PENDING',
+            'bank_name' => $request->bank_name,
+            'account_number' => $request->account_number,
+            'ifsc_code' => $request->ifsc_code,
+            'account_holder_name' => $request->account_holder_name,
         ]);
 
         return response()->json($withdraw, 201);
@@ -168,10 +177,10 @@ class PaymentController extends Controller
         if (Auth::user()->role !== 'ADMIN') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
-        return response()->json(\App\Models\WithdrawRequest::with('user')->where('status', 'PENDING')->get());
+        return response()->json(\App\Models\WithdrawRequest::with('user')->orderBy('created_at', 'desc')->get());
     }
 
-    public function approveWithdrawal($id)
+    public function approveWithdrawal(Request $request, $id)
     {
         if (Auth::user()->role !== 'ADMIN') {
             return response()->json(['error' => 'Unauthorized'], 403);
@@ -179,11 +188,14 @@ class PaymentController extends Controller
 
         $withdraw = \App\Models\WithdrawRequest::findOrFail($id);
         if ($withdraw->status !== 'PENDING') {
-            return response()->json(['error' => 'Not pending'], 400);
+            return response()->json(['error' => 'Request is already processed'], 400);
         }
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($withdraw) {
-            $withdraw->status = 'COMPLETED';
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($withdraw, $request) {
+            $withdraw->status = 'PAID';
+            $withdraw->processed_by = Auth::id();
+            $withdraw->processed_at = now();
+            $withdraw->admin_note = $request->admin_note;
             $withdraw->save();
 
             $wallet = $this->walletService->getWallet($withdraw->user_id);
@@ -192,13 +204,41 @@ class PaymentController extends Controller
             \Illuminate\Support\Facades\DB::table('admin_logs')->insert([
                 'admin_id' => Auth::id(),
                 'action' => 'payout_approved',
-                'description' => "Approved payout of ₹{$withdraw->amount} for Merchant ID: {$withdraw->user_id}",
+                'description' => "Approved and Paid payout of ₹{$withdraw->amount} for User ID: {$withdraw->user_id}",
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
-        });
 
-        return response()->json(['message' => 'Payout disbursed']);
+            return response()->json(['message' => 'Payout processed and marked as PAID']);
+        });
+    }
+
+    public function rejectWithdrawal(Request $request, $id)
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $withdraw = \App\Models\WithdrawRequest::findOrFail($id);
+        if ($withdraw->status !== 'PENDING') {
+            return response()->json(['error' => 'Request is already processed'], 400);
+        }
+
+        $withdraw->status = 'REJECTED';
+        $withdraw->processed_by = Auth::id();
+        $withdraw->processed_at = now();
+        $withdraw->admin_note = $request->admin_note;
+        $withdraw->save();
+
+        \Illuminate\Support\Facades\DB::table('admin_logs')->insert([
+            'admin_id' => Auth::id(),
+            'action' => 'payout_rejected',
+            'description' => "Rejected payout of ₹{$withdraw->amount} for User ID: {$withdraw->user_id}. Reason: {$request->admin_note}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Payout request rejected']);
     }
 
     public function searchPayee(Request $request)
