@@ -440,23 +440,19 @@ class LoanController extends Controller
                 
                 $gstAmount = round($amount * 0.18); // Keep 18% rule?
                 
-                $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount + $interestAmount;
-                $totalPayable = $loan->amount + $totalFees;
+                // Fees are taken UPFRONT, so do not add to Repayment Schedule.
+                // Repayment = Principal + Interest
+                $totalPayable = $loan->amount + $interestAmount;
 
             } else {
                  // Fallback if config not found (shouldn't happen if validated)
-                 $totalPayable = $loan->amount; // Risk!
+                 $totalPayable = $loan->amount; 
             }
             
         } else {
             // Legacy Logic (Hardcoded Fallback)
-            $processingFee = $loan->amount == 10000 ? 0 : 1200;
-            $loginFee = $loan->amount == 10000 ? 300 : 200;
-            $fieldKycFee = $loan->amount == 10000 ? 500 : 600;
-            $gstAmount = round($loan->amount * 0.18);
-            
-            $totalFees = $processingFee + $loginFee + $fieldKycFee + $gstAmount;
-            $totalPayable = $loan->amount + $totalFees;
+            // Assuming legacy was also intended to be Principal + Interest (which was 0 for small loans)
+            $totalPayable = $loan->amount;
         }
 
         $totalEmis = 0;
@@ -476,9 +472,9 @@ class LoanController extends Controller
         }
 
         // Calculate total EMIs
-        if ($plan) {
-            // Use plan days if available
-            $totalDays = $plan->tenure_days;
+        if ($plan && isset($config)) {
+            // Use config days if available
+            $totalDays = $config['tenure_days'];
             $totalEmis = floor($totalDays / $intervalDays);
         } else {
             // Legacy: Based on 30 days per month
