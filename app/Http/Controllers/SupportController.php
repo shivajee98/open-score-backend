@@ -61,12 +61,15 @@ class SupportController extends Controller
         ]);
 
         // Create initial message
-        TicketMessage::create([
+        $msg = TicketMessage::create([
             'support_ticket_id' => $ticket->id,
             'user_id' => Auth::id(),
             'message' => $request->message,
             'is_admin_reply' => false,
         ]);
+        
+        // Broadcast event
+        event(new \App\Events\MessageSent($msg));
 
         return response()->json($ticket->load('messages'), 201);
     }
@@ -111,6 +114,9 @@ class SupportController extends Controller
             'attachment_url' => $request->attachment_url,
             'is_admin_reply' => $user->role === 'ADMIN',
         ]);
+        
+        // Broadcast event
+        event(new \App\Events\MessageSent($message));
 
         // If user replies, status maybe open/in_progress? 
         // If admin replies, we assume in_progress or resolved if they updated status separately.

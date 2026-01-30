@@ -8,6 +8,7 @@ use App\Http\Controllers\LoanController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\QrController;
+use App\Http\Controllers\SupportController;
 
 Route::post('/auth/otp', [AuthController::class, 'requestOtp']);
 Route::post('/auth/verify', [AuthController::class, 'verifyOtp']);

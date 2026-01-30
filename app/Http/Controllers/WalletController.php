@@ -45,17 +45,36 @@ class WalletController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
-        $transactions->getCollection()->transform(function ($tx) {
+        // Optimization: Pre-fetch related wallets and users to avoid N+1 queries
+        $walletIds = [];
+        foreach ($transactions->getCollection() as $tx) {
+            if ($tx->source_type === 'QR_PAYMENT' && $tx->source_id) {
+                $walletIds[] = $tx->source_id;
+            }
+        }
+
+        $wallets = [];
+        $users = [];
+
+        if (!empty($walletIds)) {
+            $wallets = \App\Models\Wallet::whereIn('id', array_unique($walletIds))->get()->keyBy('id');
+            $userIds = $wallets->pluck('user_id')->unique()->toArray();
+            if (!empty($userIds)) {
+                $users = \App\Models\User::whereIn('id', $userIds)->get()->keyBy('id');
+            }
+        }
+
+        $transactions->getCollection()->transform(function ($tx) use ($wallets, $users) {
             // Default values
             $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Cashback' : 'OpenScore';
             $tx->counterparty_vpa = 'System';
 
             if ($tx->source_type === 'QR_PAYMENT' && $tx->source_id) {
                 // source_id is now the Counterparty Wallet ID
-                $counterpartyWallet = \App\Models\Wallet::find($tx->source_id);
-                if ($counterpartyWallet) {
-                    $user = \App\Models\User::find($counterpartyWallet->user_id);
-                    if ($user) {
+                if (isset($wallets[$tx->source_id])) {
+                    $counterpartyWallet = $wallets[$tx->source_id];
+                    if (isset($users[$counterpartyWallet->user_id])) {
+                        $user = $users[$counterpartyWallet->user_id];
                         $tx->counterparty_name = $user->name;
                         $tx->counterparty_vpa = $user->mobile_number . '@openscore';
                     }
