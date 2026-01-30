@@ -117,8 +117,9 @@ class LoanController extends Controller
                 }
 
                 // Find matching configuration for the requested tenure
-                // Request tenure is in months (approx), Config is in days.
-                $targetDays = $request->tenure * 30; // Approx
+                // Heuristic: If tenure > 6, assume DAYS. Else, MONTHS.
+                $tenureIsDays = $request->tenure > 6;
+                $targetDays = $tenureIsDays ? $request->tenure : $request->tenure * 30;
                 
                 $config = null;
                 if ($plan->configurations) {
@@ -406,7 +407,10 @@ class LoanController extends Controller
         }
         
         if ($plan) {
-            $targetDays = $loan->tenure * 30;
+            // Replicate heuristic: If tenure > 6, it's days.
+            $tenureIsDays = $loan->tenure > 6;
+            $targetDays = $tenureIsDays ? $loan->tenure : $loan->tenure * 30;
+
             $config = null;
             if ($plan->configurations) {
                 foreach ($plan->configurations as $conf) {
