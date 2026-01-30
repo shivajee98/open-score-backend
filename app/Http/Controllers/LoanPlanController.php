@@ -104,7 +104,8 @@ class LoanPlanController extends Controller
             'amount' => 'required|numeric|min:0',
             'configurations' => 'required|array',
             'configurations.*.tenure_days' => 'required|integer|min:1',
-            'configurations.*.interest_rate' => 'required|numeric|min:0',
+            'configurations.*.interest_rate' => 'nullable|numeric|min:0',
+            'configurations.*.interest_rates' => 'nullable|array',
             'configurations.*.allowed_frequencies' => 'required|array',
             'configurations.*.fees' => 'array', // Optional custom fees
             'configurations.*.fees.*.name' => 'required_with:configurations.*.fees|string',

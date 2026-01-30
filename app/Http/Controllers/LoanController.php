@@ -431,9 +431,11 @@ class LoanController extends Controller
                 
                 // Interest
                 $interestAmount = 0;
-                if (($config['interest_rate'] ?? 0) > 0) {
+                $effectiveRate = $config['interest_rates'][$frequency] ?? ($config['interest_rate'] ?? 0);
+                
+                if ($effectiveRate > 0) {
                      $months = $config['tenure_days'] / 30;
-                     $interestAmount = ($amount * ($config['interest_rate'] / 100)) * $months;
+                     $interestAmount = ($amount * ($effectiveRate / 100)) * $months;
                 }
                 
                 $gstAmount = round($amount * 0.18); // Keep 18% rule?
