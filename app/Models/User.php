@@ -58,7 +58,8 @@ class User extends Authenticatable implements JWTSubject
     {
         return [
             'role' => $this->role,
-            'mobile_number' => $this->mobile_number
+            'mobile_number' => $this->mobile_number,
+            'is_onboarded' => (bool)$this->is_onboarded
         ];
     }
 
