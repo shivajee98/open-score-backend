@@ -111,7 +111,14 @@ class AuthController extends Controller
             $wallet = $walletService->createWallet($user->id);
         }
 
-        return response()->json(['message' => 'Onboarding completed', 'user' => $user]);
+        // Generate fresh token with updated is_onboarded claim
+        $token = Auth::guard('api')->login($user);
+
+        return response()->json([
+            'message' => 'Onboarding completed',
+            'user' => $user,
+            'access_token' => $token
+        ]);
     }
 
     public function completeMerchantProfile(Request $request)
@@ -139,6 +146,7 @@ class AuthController extends Controller
         $user->daily_turnover = $request->daily_turnover;
         $user->business_address = $request->business_address;
         $user->pincode = $request->pincode;
+        $user->is_onboarded = true;
         $user->save();
 
         // Set Transaction PIN
@@ -167,7 +175,14 @@ class AuthController extends Controller
             'Welcome bonus for Merchant Profile Completion'
         );
 
-        return response()->json(['message' => 'Merchant profile completed', 'user' => $user]);
+        // Generate fresh token with updated is_onboarded claim
+        $token = Auth::guard('api')->login($user);
+
+        return response()->json([
+            'message' => 'Merchant profile completed',
+            'user' => $user,
+            'access_token' => $token
+        ]);
     }
 
     public function me()
