@@ -66,7 +66,9 @@ class AdminController extends Controller
                 'mobile_number' => $user->mobile_number,
                 'role' => $user->role,
                 'status' => $user->status ?? 'ACTIVE',
-                'wallet_balance' => $balance
+                'wallet_balance' => $balance,
+                'cashback_percentage' => (float)$user->cashback_percentage,
+                'cashback_flat_amount' => (float)$user->cashback_flat_amount
             ];
         });
 
