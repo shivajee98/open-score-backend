@@ -18,18 +18,17 @@ class MerchantController extends Controller
         $query = User::where('role', 'MERCHANT');
 
         if ($request->pincode) {
-            $query->where('pincode', $request->pincode);
+            $query->where('pincode', 'like', '%' . $request->pincode . '%');
         } elseif ($request->city) {
-            $query->where('city', $request->city);
+            $query->where('city', 'like', '%' . $request->city . '%');
         } else {
             // Fallback to user's location if available
             $user = Auth::guard('api')->user();
-            if ($user) {
-                if ($user->pincode) {
-                    $query->where('pincode', $user->pincode);
-                } elseif ($user->city) {
-                    $query->where('city', $user->city);
-                }
+            if ($user && ($user->pincode || $user->city)) {
+                 $query->where(function($q) use ($user) {
+                     if ($user->pincode) $q->orWhere('pincode', 'like', "%{$user->pincode}%");
+                     if ($user->city) $q->orWhere('city', 'like', "%{$user->city}%");
+                 });
             }
         }
 
