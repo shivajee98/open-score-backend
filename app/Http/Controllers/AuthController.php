@@ -28,12 +28,14 @@ class AuthController extends Controller
         $request->validate([
             'mobile_number' => 'required|string',
             'otp' => 'required|string',
-            'role' => 'nullable|string|in:CUSTOMER,MERCHANT,ADMIN'
+            'role' => 'nullable|string|in:CUSTOMER,MERCHANT,ADMIN',
+            'referral_code' => 'nullable|string'
         ]);
 
         $mobile = $request->mobile_number;
         $otp = $request->otp;
         $role = $request->role; // REMOVE DEFAULT CUSTOMER
+        $referralCode = $request->referral_code;
 
         // Static Admin Check
         if ($role === 'ADMIN') {
@@ -54,6 +56,19 @@ class AuthController extends Controller
                      return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
                  }
                  
+                 // Handle Referral Logic for New User
+                 $referralCampaignId = null;
+                 $cashbackAmount = 0;
+                 if ($referralCode) {
+                    $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
+                        ->where('is_active', true)
+                        ->first();
+                    if ($campaign) {
+                        $referralCampaignId = $campaign->id;
+                        $cashbackAmount = $campaign->cashback_amount;
+                    }
+                 }
+
                  // Create new user (Customer/Merchant)
                  $user = \App\Models\User::create([
                      'mobile_number' => $mobile,
@@ -61,11 +76,25 @@ class AuthController extends Controller
                      'status' => 'ACTIVE',
                      'is_onboarded' => false,
                      'password' => bcrypt('password'),
+                     'referral_campaign_id' => $referralCampaignId
                  ]);
 
                  // Create Wallet for new user
                  $walletService = app(\App\Services\WalletService::class);
                  $walletService->createWallet($user->id);
+
+                 // Credit Referral Bonus
+                 if ($cashbackAmount > 0) {
+                     $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
+                     $walletService->credit(
+                         $wallet->id,
+                         $cashbackAmount,
+                         'REFERRAL_BONUS',
+                         $user->id,
+                         "Welcome Bonus from code: {$referralCode}"
+                     );
+                 }
+
              } else {
                  // If user exists but is not onboarded, update the role if provided
                  if (!$user->is_onboarded && $role) {

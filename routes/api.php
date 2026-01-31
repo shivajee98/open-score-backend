@@ -124,4 +124,8 @@ Route::middleware('auth:api')->group(function () {
     // Admin User Details
     Route::get('/admin/users/{id}/transactions', [AdminController::class, 'getUserTransactions']);
     Route::post('/admin/users/bulk-cashback', [AdminController::class, 'bulkUpdateCashback']);
+    // Referral System
+    Route::get('/admin/referrals', [\App\Http\Controllers\ReferralController::class, 'index']);
+    Route::post('/admin/referrals', [\App\Http\Controllers\ReferralController::class, 'store']);
+    Route::get('/admin/referrals/{id}', [\App\Http\Controllers\ReferralController::class, 'show']);
 });

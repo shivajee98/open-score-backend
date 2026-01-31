@@ -33,7 +33,8 @@ class User extends Authenticatable implements JWTSubject
         'account_holder_name',
         'account_number',
         'cashback_percentage',
-        'cashback_flat_amount'
+        'cashback_flat_amount',
+        'referral_campaign_id'
     ];
 
     protected $hidden = [
@@ -84,5 +85,10 @@ class User extends Authenticatable implements JWTSubject
         return (float) $this->loans()
             ->whereIn('status', ['PENDING', 'PROCEEDED', 'KYC_SENT', 'FORM_SUBMITTED', 'APPROVED'])
             ->sum('amount');
+    }
+
+    public function referralCampaign()
+    {
+        return $this->belongsTo(ReferralCampaign::class);
     }
 }
