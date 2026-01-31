@@ -41,4 +41,14 @@ class MerchantController extends Controller
 
         return response()->json($merchants);
     }
+
+    public function show($id)
+    {
+        $merchant = User::where('role', 'MERCHANT')
+                        ->where('id', $id)
+                        ->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'email')
+                        ->firstOrFail();
+
+        return response()->json($merchant);
+    }
 }

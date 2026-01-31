@@ -19,6 +19,7 @@ Route::get('/merchants', [AuthController::class, 'listPayees']); // Legacy suppo
 Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
 Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
 Route::get('/merchants/nearby', [\App\Http\Controllers\MerchantController::class, 'nearby']);
+Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 'show']);
 
 Route::middleware('auth:api')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
