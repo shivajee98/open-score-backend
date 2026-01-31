@@ -19,9 +19,13 @@ class MerchantController extends Controller
 
         if ($request->pincode) {
             $query->where('pincode', 'like', '%' . $request->pincode . '%');
-        } elseif ($request->city) {
+        }
+
+        if ($request->city) {
             $query->where('city', 'like', '%' . $request->city . '%');
-        } else {
+        }
+
+        if (!$request->pincode && !$request->city) {
             // Fallback to user's location if available
             $user = Auth::guard('api')->user();
             if ($user && ($user->pincode || $user->city)) {
