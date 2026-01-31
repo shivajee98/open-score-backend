@@ -123,4 +123,5 @@ Route::middleware('auth:api')->group(function () {
 
     // Admin User Details
     Route::get('/admin/users/{id}/transactions', [AdminController::class, 'getUserTransactions']);
+    Route::post('/admin/users/bulk-cashback', [AdminController::class, 'bulkUpdateCashback']);
 });

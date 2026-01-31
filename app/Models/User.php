@@ -31,7 +31,9 @@ class User extends Authenticatable implements JWTSubject
         'bank_name',
         'ifsc_code',
         'account_holder_name',
-        'account_number'
+        'account_number',
+        'cashback_percentage',
+        'cashback_flat_amount'
     ];
 
     protected $hidden = [

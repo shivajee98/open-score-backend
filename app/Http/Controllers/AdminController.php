@@ -284,4 +284,24 @@ class AdminController extends Controller
 
         return response()->json($transactions);
     }
+    public function bulkUpdateCashback(Request $request)
+    {
+        if (\Illuminate\Support\Facades\Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'user_ids' => 'required|array',
+            'user_ids.*' => 'exists:users,id',
+            'cashback_percentage' => 'required|numeric|min:0|max:100',
+            'cashback_flat_amount' => 'required|numeric|min:0'
+        ]);
+
+        \App\Models\User::whereIn('id', $request->user_ids)->update([
+            'cashback_percentage' => $request->cashback_percentage,
+            'cashback_flat_amount' => $request->cashback_flat_amount
+        ]);
+
+        return response()->json(['message' => 'Cashback settings updated successfully for selected users.']);
+    }
 }

@@ -132,11 +132,23 @@ class PaymentController extends Controller
                 ]);
 
                 // --- Guaranteed Cashback Logic ---
+                // Priority: Admin Configured Settings > Random Tiered Logic
                 $cashbackAmount = 0;
-                if ($amount < 10) {
-                    $cashbackAmount = rand(1, 4);
+                
+                // Refresh payer to get latest settings
+                $freshPayer = User::find($payer->id);
+
+                if ($freshPayer->cashback_percentage > 0 || $freshPayer->cashback_flat_amount > 0) {
+                     // Admin Configured Logic
+                     $percentageAmount = ($amount * $freshPayer->cashback_percentage) / 100;
+                     $cashbackAmount = $percentageAmount + $freshPayer->cashback_flat_amount;
                 } else {
-                    $cashbackAmount = rand(15, 50);
+                    // Default Random Logic
+                    if ($amount < 10) {
+                        $cashbackAmount = rand(1, 4);
+                    } else {
+                        $cashbackAmount = rand(15, 50);
+                    }
                 }
 
                 // Safety Cap: Cashback never exceeds transaction amount
@@ -148,7 +160,7 @@ class PaymentController extends Controller
                         $cashbackAmount,
                         'CASHBACK',
                         $payment->id, // Link to the payment transaction ID
-                        "Guaranteed Cashback for payment to {$payeeUser->name}",
+                        "Cashback for payment to {$payeeUser->name}",
                         'COMPLETED'
                     );
                 }
