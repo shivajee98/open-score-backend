@@ -123,7 +123,7 @@ class PaymentController extends Controller
             try {
                 $this->walletService->transfer($payer->id, $payeeUser->id, $amount, $ref);
                 
-                Payment::create([
+                $payment = Payment::create([
                     'payer_wallet_id' => $payerWallet->id,
                     'payee_wallet_id' => $payeeWallet->id,
                     'amount' => $amount,
@@ -131,7 +131,30 @@ class PaymentController extends Controller
                     'transaction_ref' => $ref
                 ]);
 
-                return response()->json(['message' => 'Transfer Successful', 'ref' => $ref]);
+                // --- Guaranteed Cashback Logic ---
+                $cashbackAmount = 0;
+                if ($amount < 10) {
+                    $cashbackAmount = rand(1, 4);
+                } else {
+                    $cashbackAmount = rand(15, 50);
+                }
+
+                // Safety Cap: Cashback never exceeds transaction amount
+                $cashbackAmount = min($cashbackAmount, $amount);
+
+                if ($cashbackAmount > 0) {
+                    $this->walletService->credit(
+                        $payerWallet->id,
+                        $cashbackAmount,
+                        'CASHBACK',
+                        $payment->id, // Link to the payment transaction ID
+                        "Guaranteed Cashback for payment to {$payeeUser->name}",
+                        'COMPLETED'
+                    );
+                }
+                // ---------------------------------
+
+                return response()->json(['message' => 'Transfer Successful', 'ref' => $ref, 'cashback' => $cashbackAmount]);
             } catch (\Exception $e) {
                 return response()->json(['error' => $e->getMessage()], 400);
             }
