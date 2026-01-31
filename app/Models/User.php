@@ -25,6 +25,7 @@ class User extends Authenticatable implements JWTSubject
         'daily_turnover',
         'business_address',
         'pincode',
+        'city',
         'otp',
         'otp_expires_at',
         'bank_name',

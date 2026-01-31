@@ -18,6 +18,7 @@ Route::get('/merchants', [AuthController::class, 'listPayees']); // Legacy suppo
 // External KYC (Publicly accessible with token)
 Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
 Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
+Route::get('/merchants/nearby', [\App\Http\Controllers\MerchantController::class, 'nearby']);
 
 Route::middleware('auth:api')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
