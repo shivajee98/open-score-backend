@@ -28,16 +28,46 @@ class SupportController extends Controller
     // List all tickets for Admin
     public function adminIndex(Request $request)
     {
+        $user = Auth::user();
+
         $tickets = SupportTicket::with(['user', 'messages' => function($q) {
                 $q->latest()->limit(1);
-            }])
+            }, 'assignedAgent']) // meaningful relationship
             ->when($request->status, function($q, $status) {
                 return $q->where('status', $status);
             })
+            // Custom Sorting: Assigned to ME first, then Unassigned, then Assigned to Others
+            ->orderByRaw("
+                CASE 
+                    WHEN assigned_to = ? THEN 1 
+                    WHEN assigned_to IS NULL THEN 2 
+                    ELSE 3 
+                END
+            ", [$user->id])
             ->latest()
             ->paginate(20);
 
         return response()->json($tickets);
+    }
+
+    // Assign ticket to current agent
+    public function assign(Request $request, $id)
+    {
+        $user = Auth::user();
+        if ($user->role !== 'ADMIN') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $ticket = SupportTicket::findOrFail($id);
+
+        if ($ticket->assigned_to && $ticket->assigned_to !== $user->id) {
+             return response()->json(['message' => 'Ticket already assigned to another agent'], 409);
+        }
+
+        $ticket->assigned_to = $user->id;
+        $ticket->save();
+
+        return response()->json($ticket->load(['user', 'assignedAgent']));
     }
 
     // Create a new ticket

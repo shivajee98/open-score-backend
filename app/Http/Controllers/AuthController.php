@@ -81,6 +81,17 @@ class AuthController extends Controller
 
         $token = Auth::guard('api')->login($user);
 
+        if ($user->role === 'ADMIN') {
+            DB::table('admin_logs')->insert([
+                'admin_id' => $user->id,
+                'action' => 'login',
+                'description' => "Agent Logged In",
+                'created_at' => now(),
+                'updated_at' => now(),
+                'ip_address' => $request->ip()
+            ]);
+        }
+
         return response()->json([
             'access_token' => $token,
             'token_type' => 'bearer',

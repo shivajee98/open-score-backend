@@ -243,6 +243,7 @@ class LoanController extends Controller
         }
         
         $loan->status = 'KYC_SENT';
+        $loan->kyc_sent_by = Auth::id(); // Capture who sent it
         $loan->save();
 
         // Reflect loan amount in wallet as LOCKED (PENDING status)

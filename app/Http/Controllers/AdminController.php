@@ -272,4 +272,16 @@ class AdminController extends Controller
             }], 'amount')
             ->get());
     }
+
+    public function getUserTransactions($userId)
+    {
+        $wallet = $this->walletService->getWallet($userId);
+        if (!$wallet) return response()->json([]);
+
+        $transactions = \App\Models\WalletTransaction::where('wallet_id', $wallet->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($transactions);
+    }
 }

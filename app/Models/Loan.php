@@ -22,7 +22,8 @@ class Loan extends Model
         'disbursed_at',
         'disbursed_by',
         'closed_at',
-        'loan_plan_id'
+        'loan_plan_id',
+        'kyc_sent_by'
     ];
 
     protected $casts = [

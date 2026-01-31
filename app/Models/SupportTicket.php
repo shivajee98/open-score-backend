@@ -14,11 +14,17 @@ class SupportTicket extends Model
         'subject',
         'status',
         'priority',
+        'assigned_to',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function assignedAgent()
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
     }
 
     public function messages()

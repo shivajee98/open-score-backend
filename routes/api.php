@@ -119,4 +119,8 @@ Route::middleware('auth:api')->group(function () {
     
     // Admin Support Logic
     Route::get('/admin/support/tickets', [SupportController::class, 'adminIndex']);
+    Route::post('/admin/support/assign/{id}', [SupportController::class, 'assign']);
+
+    // Admin User Details
+    Route::get('/admin/users/{id}/transactions', [AdminController::class, 'getUserTransactions']);
 });
