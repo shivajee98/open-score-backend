@@ -14,14 +14,48 @@ class LoanPlanController extends Controller
     public function index()
     {
         $userId = Auth::id();
-        return response()->json(
-            LoanPlan::where('is_active', true)
-                ->where(function($q) use ($userId) {
-                    $q->where('is_public', true)
-                      ->orWhereHas('users', fn($uq) => $uq->where('users.id', $userId));
-                })
-                ->get()
-        );
+        $plans = LoanPlan::where('is_active', true)
+            ->where(function($q) use ($userId) {
+                $q->where('is_public', true)
+                  ->orWhereHas('users', fn($uq) => $uq->where('users.id', $userId));
+            })
+            ->orderBy('amount', 'asc')
+            ->get();
+
+        // Fetch amounts of loans "taken" by user (Disbursed or Closed)
+        // We assume 'DISBURSED', 'CLOSED', 'SETTLED' imply the user successfully reached the stage of taking the loan.
+        $takenAmounts = \App\Models\Loan::where('user_id', $userId)
+            ->whereIn('status', ['DISBURSED', 'CLOSED', 'SETTLED', 'PAID'])
+            ->pluck('amount')
+            ->map(fn($a) => (float)$a)
+            ->unique()
+            ->toArray();
+
+        $plans->transform(function ($plan) use ($plans, $takenAmounts) {
+            $amount = (float)$plan->amount;
+            $isLocked = false;
+
+            // Lock logic for > 50k
+            if ($amount > 50000) {
+                // Find previous level plan (largest amount strictly less than current)
+                $prevPlan = $plans->where('amount', '<', $amount)->sortByDesc('amount')->first();
+                
+                if ($prevPlan) {
+                    $prevAmount = (float)$prevPlan->amount;
+                    // Check if user has taken the previous amount
+                    // Using loose comparison or small epsilon might be safer for floats, but strict in_array usually works if stored same.
+                    // Let's rely on db stored values match.
+                    if (!in_array($prevAmount, $takenAmounts)) {
+                        $isLocked = true;
+                    }
+                }
+            }
+            
+            $plan->is_locked = $isLocked;
+            return $plan;
+        });
+
+        return response()->json($plans);
     }
 
     /**
