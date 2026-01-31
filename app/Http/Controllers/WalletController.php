@@ -28,11 +28,20 @@ class WalletController extends Controller
         $balance = $this->walletService->getBalance($wallet->id);
         $lockedBalance = $this->walletService->getLockedBalance($wallet->id);
 
-        return response()->json([
+        $response = [
             'wallet_uuid' => $wallet->uuid,
             'balance' => $balance,
             'locked_balance' => $lockedBalance
-        ]);
+        ];
+
+        if ($user->role === 'MERCHANT') {
+            $dailyVolume = \App\Models\Payment::where('payee_wallet_id', $wallet->id)
+                ->whereDate('created_at', \Carbon\Carbon::today())
+                ->sum('amount');
+            $response['daily_earnings'] = $dailyVolume;
+        }
+
+        return response()->json($response);
     }
 
     public function getTransactions()

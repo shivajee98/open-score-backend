@@ -158,6 +158,57 @@ class PaymentController extends Controller
             return response()->json(['error' => 'Insufficient balance'], 400);
         }
 
+        // --- RESTRICTIONS START ---
+        if ($user->role === 'MERCHANT') {
+            // Merchant Restriction: Daily Volume Check AND Cap
+            $dailyVolume = \App\Models\Payment::where('payee_wallet_id', $wallet->id)
+                ->whereDate('created_at', \Carbon\Carbon::today())
+                ->sum('amount');
+
+            // 1. Min Volume Requirement (Eligibility)
+            $minVolume = 5000;
+            if ($dailyVolume < $minVolume) {
+                return response()->json([
+                    'error' => "Daily transaction volume of ₹{$minVolume} required to withdraw. Today's volume: ₹{$dailyVolume}"
+                ], 400);
+            }
+
+            // 2. Withdrawal Amount Cap (Cannot withdraw more than earned today)
+            // Note: This logic implies if they have old balance, they can't withdraw it unless they earn today?
+            // "he can request that much amount only for the withdrawl that he earned in a day"
+            if ($request->amount > $dailyVolume) {
+                return response()->json([
+                    'error' => "You can only withdraw up to your today's earnings (₹{$dailyVolume})."
+                ], 400);
+            }
+        } else {
+            // Customer Restriction: Loan Spend Check
+            $activeLoan = \App\Models\Loan::where('user_id', $user->id)
+                ->whereIn('status', ['ACTIVE', 'DISBURSED', 'APPROVED']) // Cover all potentially active states
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            if ($activeLoan) {
+                $loanAmount = $activeLoan->amount;
+                // Calculate spend since loan disbursal (or approval if disbursal missing)
+                $startDate = $activeLoan->disbursed_at ?? $activeLoan->approved_at ?? $activeLoan->created_at;
+                
+                $totalSpend = \App\Models\Payment::where('payer_wallet_id', $wallet->id)
+                    ->where('created_at', '>=', $startDate)
+                    ->sum('amount');
+
+                $requiredSpend = $loanAmount * 0.30; 
+                
+                if ($totalSpend < $requiredSpend) {
+                    $remaining = $requiredSpend - $totalSpend;
+                    return response()->json([
+                        'error' => "You must spend at least 30% of your loan (₹{$requiredSpend}) on app transactions before withdrawing. Remaining: ₹{$remaining}"
+                    ], 400);
+                }
+            }
+        }
+        // --- RESTRICTIONS END ---
+
         $withdraw = \App\Models\WithdrawRequest::create([
             'user_id' => $user->id,
             'wallet_id' => $wallet->id,
