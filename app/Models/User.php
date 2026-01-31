@@ -66,6 +66,8 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
+    protected $appends = ['active_locked_balance'];
+
     public function wallet()
     {
         return $this->hasOne(Wallet::class);
@@ -74,5 +76,13 @@ class User extends Authenticatable implements JWTSubject
     public function loans()
     {
         return $this->hasMany(Loan::class);
+    }
+
+    public function getActiveLockedBalanceAttribute()
+    {
+        // Sum of all loans that are in a "Pre-Disbursal" but "Active" state
+        return (float) $this->loans()
+            ->whereIn('status', ['PENDING', 'PROCEEDED', 'KYC_SENT', 'FORM_SUBMITTED', 'APPROVED'])
+            ->sum('amount');
     }
 }
