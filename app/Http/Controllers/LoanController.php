@@ -447,9 +447,9 @@ class LoanController extends Controller
                 
                 $gstAmount = round($amount * 0.18); // Keep 18% rule?
                 
-                // Fees are taken UPFRONT, so do not add to Repayment Schedule.
-                // Repayment = Principal + Interest
-                $totalPayable = $loan->amount + $interestAmount;
+                // Fees are ADDED to Repayment Schedule.
+                // Repayment = Principal + Fees + GST + Interest
+                $totalPayable = $loan->amount + $processingFee + $gstAmount + $interestAmount;
 
             } else {
                  // Fallback if config not found (shouldn't happen if validated)

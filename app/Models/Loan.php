@@ -129,22 +129,14 @@ class Loan extends Model
         // Usually Interest is ADDED to repayment, not deducted from disbursal.
         // Fees are usually deducted.
         
-        $totalDeductions = $totalFees + $gst; // Only upfront deductions
-        $disbursalAmount = $amount - $totalDeductions;
+        // Logic Update: Fees are financed (added to repayment), not deducted.
+        // Disbursal = Amount (User gets full money)
+        // Repayment = Amount + Fees + GST + Interest
+
+        $totalDeductions = 0; // No upfront deductions
+        $disbursalAmount = $amount;
         
-        $netPayableByCustomer = $amount + $totalInterest;
-        
-        // However, previous code summed interest into deductions? 
-        // "Total fee and charges ... totalDeductions"
-        // And "Net Payable Amount = principal + totalDeductions"
-        // Let's assume we want to show transparency.
-        
-        // If the user said "frontend showing principle fee 27162" when loan is 30000.
-        // 30000 - 27162 = 2838.
-        // This math is confusing. 
-        // Let's stick to standard logic:
-        // Disbursal = Amount - Upfront Fees
-        // Repayment = Amount + Interest
+        $netPayableByCustomer = $amount + $totalFees + $gst + $totalInterest;
 
         return [
             'principal' => $amount,
