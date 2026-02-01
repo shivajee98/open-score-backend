@@ -178,9 +178,18 @@ class LoanController extends Controller
         $tenureDays = $request->tenure_days;
         $frequency = strtoupper($request->frequency);
         
+        // LOGGING FOR DEBUGGING
+        \Illuminate\Support\Facades\Log::info("CalculatePreview Debug: ", [
+            'raw_freq' => $request->frequency,
+            'upper_freq' => $frequency,
+            'tenure_days' => $tenureDays
+        ]);
+
         // Parse frequency to get interval days
         $intervalDays = $this->parseFrequencyInterval($frequency);
         
+        \Illuminate\Support\Facades\Log::info("CalculatePreview Interval: ", ['interval' => $intervalDays]);
+
         // Calculate number of EMIs
         $numEmis = max(1, floor($tenureDays / $intervalDays));
         
