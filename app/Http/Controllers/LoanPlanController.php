@@ -87,7 +87,7 @@ class LoanPlanController extends Controller
             // but usually in Admin we want to see all non-deleted plans even if inactive.
         }
         
-        return response()->json($query->orderBy('created_at', 'desc')->get());
+        return response()->json($query->orderBy('amount', 'asc')->get());
     }
 
     /**

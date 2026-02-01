@@ -763,7 +763,7 @@ class LoanController extends Controller
             });
         }
 
-        return response()->json($query->orderBy('created_at', 'desc')->paginate($request->get('per_page', 50)));
+        return response()->json($query->orderBy('amount', 'asc')->paginate($request->get('per_page', 50)));
     }
 
     public function listHistory(Request $request)
@@ -796,7 +796,7 @@ class LoanController extends Controller
             $query->whereDate('created_at', '>=', $request->date_from);
         }
 
-        return response()->json($query->orderBy('created_at', 'desc')->paginate($request->get('per_page', 50)));
+        return response()->json($query->orderBy('amount', 'asc')->paginate($request->get('per_page', 50)));
     }
 
     public function closeManually($id)
