@@ -1,27 +1,30 @@
 services:
   - type: web
-    name: openscore-backend
-    env: docker
-    dockerContext: .
-    dockerfilePath: ./Dockerfile
+    name: open-score-backend
+    env: php
+    region: oregon
+    plan: free
+    buildCommand: |
+      composer install --no-dev --optimize-autoloader
+      php artisan config:cache
+      php artisan route:cache
+    startCommand: |
+      php artisan migrate --force
+      php artisan serve --host=0.0.0.0 --port=$PORT
     envVars:
+      - key: APP_ENV
+        value: production
       - key: APP_KEY
-        generateValue: true
+        sync: false  # Set this in Render dashboard
       - key: APP_DEBUG
-        value: "false"
-      - key: LOG_CHANNEL
-        value: stderr
+        value: false
       - key: DB_CONNECTION
         value: mysql
       - key: DB_HOST
-        sync: false
-      - key: DB_PORT
-        value: 4000
+        sync: false  # Set this in Render dashboard
       - key: DB_DATABASE
-        value: test
+        sync: false
       - key: DB_USERNAME
         sync: false
       - key: DB_PASSWORD
         sync: false
-      - key: MYSQL_ATTR_SSL_CA
-        value: /etc/ssl/certs/ca-certificates.crt
