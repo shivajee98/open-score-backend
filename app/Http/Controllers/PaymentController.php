@@ -224,6 +224,13 @@ class PaymentController extends Controller
                 ->first();
 
             if ($activeLoan) {
+                // Feature Restriction: Withdrawals only for loans >= 50k
+                if ($activeLoan->amount < 50000) {
+                    return response()->json([
+                        'error' => "Bank withdrawals are only available for Premium Loans of ₹50,000 and above. Please use your wallet for scan & pay."
+                    ], 403);
+                }
+
                 $loanAmount = $activeLoan->amount;
                 // Calculate spend since loan disbursal (or approval if disbursal missing)
                 $startDate = $activeLoan->disbursed_at ?? $activeLoan->approved_at ?? $activeLoan->created_at;
@@ -240,6 +247,10 @@ class PaymentController extends Controller
                         'error' => "You must spend at least 30% of your loan (₹{$requiredSpend}) on app transactions before withdrawing. Remaining: ₹{$remaining}"
                     ], 400);
                 }
+            } else {
+                 return response()->json([
+                    'error' => "No active loan found. Withdrawals are only available for active Premium Loans (₹50,000+)."
+                ], 403);
             }
         }
         // --- RESTRICTIONS END ---
