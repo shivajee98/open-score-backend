@@ -1,10 +1,9 @@
 services:
   - type: web
     name: open-score-backend
-    env: php
+    runtime: docker
     plan: free
-    buildCommand: bash build.sh
-    startCommand: bash start.sh
+
     envVars:
       - key: APP_ENV
         value: production
