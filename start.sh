@@ -1,5 +1,5 @@
-#!/bin/bash
-set -e
+echo "Running Composer install (Runtime Fallback)..."
+composer install --no-dev --optimize-autoloader --no-interaction
 
 echo "Running migrations..."
 php artisan migrate --force
