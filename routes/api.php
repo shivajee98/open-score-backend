@@ -54,6 +54,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/loans', [LoanController::class, 'listAll']);
     Route::get('/admin/loans/history', [LoanController::class, 'listHistory']);
     Route::get('/admin/logs', [AdminController::class, 'getLogs']);
+    Route::get('/logs', [AdminController::class, 'getLogs']); // Alias for frontend consistency 
     Route::get('/admin/payouts', [PaymentController::class, 'listWithdrawals']);
     Route::post('/admin/payouts/{id}/approve', [PaymentController::class, 'approveWithdrawal']);
     
