@@ -340,7 +340,7 @@ class LoanController extends Controller
 
     public function index()
     {
-        return response()->json(Loan::with('plan')->where('user_id', Auth::id())->orderBy('created_at', 'desc')->get());
+        return response()->json(Loan::with('plan')->where('user_id', Auth::id())->orderBy('created_at', 'desc')->paginate(20));
     }
 
     public function proceed(Request $request, $id)

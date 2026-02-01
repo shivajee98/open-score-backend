@@ -329,7 +329,7 @@ class PaymentController extends Controller
         $user = Auth::user();
         return response()->json(\App\Models\WithdrawRequest::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
-            ->get());
+            ->paginate(20));
     }
 
     public function listWithdrawals()
