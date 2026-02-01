@@ -1,52 +1,47 @@
-FROM php:8.4-fpm
+FROM php:8.2-fpm
 
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
     curl \
-    unzip \
-    zip \
-    nginx \
     libpng-dev \
-    libjpeg62-turbo-dev \
-    libfreetype6-dev \
     libonig-dev \
     libxml2-dev \
-    libzip-dev \
-    && docker-php-ext-configure gd \
-        --with-freetype \
-        --with-jpeg \
-    && docker-php-ext-install \
-        pdo_mysql \
-        mbstring \
-        exif \
-        pcntl \
-        bcmath \
-        gd \
-        zip \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    zip \
+    unzip \
+    supervisor \
+    nginx
 
-COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
+# Clear cache
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /var/www/html
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
-# Copy EVERYTHING first (artisan must exist)
-COPY . .
+# Install Redis extension
+RUN pecl install redis && docker-php-ext-enable redis
 
-# Install deps WITHOUT running Laravel scripts
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts
+# Get latest Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Laravel permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 storage bootstrap/cache
+# Set working directory
+WORKDIR /var/www
 
+# Copy existing application directory permissions
+COPY --chown=www-data:www-data . /var/www
+
+# Copy Supervisor configuration
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Copy Nginx configuration
 COPY docker/nginx.conf /etc/nginx/sites-available/default
 
-EXPOSE 80
+# Create invalidation file for artisan commands (optional)
+RUN touch /var/www/storage/logs/laravel.log
+RUN chmod -R 777 /var/www/storage
 
-CMD ["sh", "-c", "php-fpm & nginx -g 'daemon off;'"]
+# Expose ports
+EXPOSE 80 8080
+
+# Start Supervisor
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
