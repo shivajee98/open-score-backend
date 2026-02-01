@@ -60,6 +60,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/payment/qr', [PaymentController::class, 'getMyQr']);
     // Existing routes...
     Route::post('/merchant/withdraw', [PaymentController::class, 'requestWithdrawal']);
+    Route::post('/wallet/request-withdrawal', [PaymentController::class, 'requestWithdrawal']); // Added for customer app
     
     // Admin Routes
     Route::prefix('admin')->group(function () {
