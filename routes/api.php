@@ -58,7 +58,13 @@ Route::middleware('auth:api')->group(function () {
     
     Route::get('/merchant/qr', [PaymentController::class, 'getMyQr']);
     Route::get('/payment/qr', [PaymentController::class, 'getMyQr']);
+    // Existing routes...
     Route::post('/merchant/withdraw', [PaymentController::class, 'requestWithdrawal']);
+    
+    // Admin Routes
+    Route::prefix('admin')->group(function () {
+        Route::resource('withdrawal-rules', \App\Http\Controllers\Admin\WithdrawalRuleController::class);
+    });
     Route::get('/payment/payee/{uuid}', [PaymentController::class, 'findPayee']);
     Route::get('/payment/search', [PaymentController::class, 'searchPayee']);
     Route::post('/payment/pay', [PaymentController::class, 'pay']);

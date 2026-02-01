@@ -194,65 +194,120 @@ class PaymentController extends Controller
         }
 
         // --- RESTRICTIONS START ---
-        if ($user->role === 'MERCHANT') {
-            // Merchant Restriction: Daily Volume Check AND Cap
-            $dailyVolume = \App\Models\Payment::where('payee_wallet_id', $wallet->id)
-                ->whereDate('created_at', \Carbon\Carbon::today())
-                ->sum('amount');
+        
+        // 1. GLOBAL / RULE-BASED DAILY LIMIT CHECK
+        // Calculate total withdrawals today (successful or pending)
+        $todayWithdrawals = \App\Models\WithdrawRequest::where('user_id', $user->id)
+            ->whereDate('created_at', \Carbon\Carbon::today())
+            ->where('status', '!=', 'REJECTED')
+            ->sum('amount');
+            
+        // Find Applicable Rules
+        // Priority: Specific User Target > Loan Plan > Global Default (if any)
+        
+        // Helper to check user targeting
+        $checkTarget = function($rule) use ($user) {
+            if (empty($rule->target_users)) return false; // Should not happen if well-formed, but safe
+            if (in_array('*', $rule->target_users)) return true;
+            if (in_array($user->id, $rule->target_users)) return true;
+            if (in_array((string)$user->id, $rule->target_users)) return true;
+            return false;
+        };
 
-            // 1. Min Volume Requirement (Eligibility)
-            $minVolume = 5000;
-            if ($dailyVolume < $minVolume) {
-                return response()->json([
-                    'error' => "Daily transaction volume of ₹{$minVolume} required to withdraw. Today's volume: ₹{$dailyVolume}"
-                ], 400);
-            }
-
-            // 2. Withdrawal Amount Cap (Cannot withdraw more than earned today)
-            // Note: This logic implies if they have old balance, they can't withdraw it unless they earn today?
-            // "he can request that much amount only for the withdrawl that he earned in a day"
-            if ($request->amount > $dailyVolume) {
-                return response()->json([
-                    'error' => "You can only withdraw up to your today's earnings (₹{$dailyVolume})."
-                ], 400);
-            }
-        } else {
-            // Customer Restriction: Loan Spend Check
-            $activeLoan = \App\Models\Loan::where('user_id', $user->id)
-                ->whereIn('status', ['ACTIVE', 'DISBURSED', 'APPROVED']) // Cover all potentially active states
+        // Get ACTIVE Loan Plan ID if exists
+        $activeLoan = \App\Models\Loan::where('user_id', $user->id)
+                ->whereIn('status', ['ACTIVE', 'DISBURSED', 'APPROVED'])
                 ->orderBy('created_at', 'desc')
                 ->first();
+        
+        $planId = $activeLoan ? $activeLoan->loan_plan_id : null;
 
-            if ($activeLoan) {
-                // Feature Restriction: Withdrawals only for loans >= 50k
-                if ($activeLoan->amount < 50000) {
-                    return response()->json([
-                        'error' => "Bank withdrawals are only available for Premium Loans of ₹50,000 and above. Please use your wallet for scan & pay."
-                    ], 403);
-                }
+        // Fetch all active rules for this user type
+        $rules = \App\Models\WithdrawalRule::where('is_active', true)
+            ->where('user_type', $user->role)
+            ->get();
 
-                $loanAmount = $activeLoan->amount;
-                // Calculate spend since loan disbursal (or approval if disbursal missing)
-                $startDate = $activeLoan->disbursed_at ?? $activeLoan->approved_at ?? $activeLoan->created_at;
-                
-                $totalSpend = \App\Models\Payment::where('payer_wallet_id', $wallet->id)
-                    ->where('created_at', '>=', $startDate)
-                    ->sum('amount');
+        // Filter rules applicable to this user
+        $applicableRules = $rules->filter(function($rule) use ($planId, $checkTarget) {
+            // Rule matches Loan Plan OR has no plan (Global)
+            // AND matches Target Group (All or Specific)
+            $planMatch = ($rule->loan_plan_id === $planId) || ($rule->loan_plan_id === null);
+            return $planMatch && $checkTarget($rule);
+        });
 
-                $requiredSpend = $loanAmount * 0.30; 
-                
-                if ($totalSpend < $requiredSpend) {
-                    $remaining = $requiredSpend - $totalSpend;
-                    return response()->json([
-                        'error' => "You must spend at least 30% of your loan (₹{$requiredSpend}) on app transactions before withdrawing. Remaining: ₹{$remaining}"
-                    ], 400);
-                }
-            } else {
-                 return response()->json([
-                    'error' => "No active loan found. Withdrawals are only available for active Premium Loans (₹50,000+)."
-                ], 403);
+        // A. DAILY LIMIT ENFORCEMENT
+        // If multiple rules exist, take the most restrictive (smallest limit) or specific?
+        // Let's assume specific plan rules override global ones? Or stricter wins?
+        // User requested: "Short limit like 1000". Let's take the lowest non-null limit defined.
+        $dailyLimit = $applicableRules->whereNotNull('daily_limit')->min('daily_limit');
+        
+        if ($dailyLimit !== null) {
+            if (($todayWithdrawals + $request->amount) > $dailyLimit) {
+                $remaining = max(0, $dailyLimit - $todayWithdrawals);
+                return response()->json([
+                    'error' => "Daily withdrawal limit reached. You can only withdraw ₹{$remaining} more today."
+                ], 400);
             }
         }
+
+        // B. LOAN UNLOCKING LOGIC (Spend & Txn Count)
+        if ($activeLoan) {
+            // Find unlocking rules specific to this loan plan
+            $unlockRules = $applicableRules->where('loan_plan_id', $planId);
+            
+            // If rules exist, check if CRITERIA ARE MET
+            $isUnlocked = true;
+            $failReason = "";
+            
+            foreach ($unlockRules as $rule) {
+                // Skip if no unlock criteria
+                if ($rule->min_spend_amount <= 0 && $rule->min_txn_count <= 0) continue;
+
+                // Check Stats since Loan Start
+                $startDate = $activeLoan->disbursed_at ?? $activeLoan->approved_at ?? $activeLoan->created_at;
+                
+                $stats = \App\Models\Payment::where('payer_wallet_id', $wallet->id)
+                    ->where('created_at', '>=', $startDate)
+                    ->selectRaw('SUM(amount) as total_spend, COUNT(*) as txn_count')
+                    ->first();
+                
+                $totalSpend = $stats->total_spend ?? 0;
+                $txnCount = $stats->txn_count ?? 0;
+
+                if ($totalSpend < $rule->min_spend_amount) {
+                    $isUnlocked = false;
+                    $shortfall = $rule->min_spend_amount - $totalSpend;
+                    $failReason .= "Spend ₹{$shortfall} more. ";
+                }
+                
+                if ($txnCount < $rule->min_txn_count) {
+                    $isUnlocked = false;
+                    $moreTxns = $rule->min_txn_count - $txnCount;
+                    $failReason .= "Do {$moreTxns} more transactions. ";
+                }
+            }
+
+            // If NOT unlocked, we apply the LOCK
+            // LOCKED AMOUNT = Remaining Principal of Loan? Or Original Amount?
+            // "He can request that much amount only... that he earned"
+            // Implementation: Max Withdrawable = Wallet Balance - Locked Amount.
+            // Start simple: If logic matches "Unlock", then Locked Amount is the Loan Amount.
+            
+            if (!$isUnlocked) {
+                // Calculate Locked Amount (Current active loan amount)
+                // Note: If user has 100k wallet balance and 50k loan, and locked, they can withdraw 50k (earnings).
+                $lockedAmount = $activeLoan->amount; 
+                $currentBalance = $this->walletService->getBalance($wallet->id);
+                $availableToWithdraw = max(0, $currentBalance - $lockedAmount);
+
+                if ($request->amount > $availableToWithdraw) {
+                     return response()->json([
+                        'error' => "Loan not unlocked. {$failReason}You can only withdraw your earnings (above loan amount): ₹{$availableToWithdraw}."
+                    ], 400);
+                }
+            }
+        }
+        
         // --- RESTRICTIONS END ---
 
         $withdraw = \App\Models\WithdrawRequest::create([
