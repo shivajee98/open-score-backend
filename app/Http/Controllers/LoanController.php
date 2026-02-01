@@ -399,9 +399,7 @@ class LoanController extends Controller
         
         // Fee Calculation Logic
         $processingFee = 0;
-        $loginFee = 0;
-        $fieldKycFee = 0;
-        $gstAmount = 0; // Will calculate
+        $gstAmount = 0; 
         
         // Check for Dynamic Plan
         $plan = null;
@@ -409,12 +407,14 @@ class LoanController extends Controller
             $plan = \App\Models\LoanPlan::find($loan->loan_plan_id);
         }
         
+        $targetDays = null;
+        $config = null;
+
         if ($plan) {
-            // Replicate heuristic: If tenure > 6, it's days.
+            // Heuristic: If tenure > 6, it's days. Otherwise it's months turned to 30 days.
             $tenureIsDays = $loan->tenure > 6;
             $targetDays = $tenureIsDays ? $loan->tenure : $loan->tenure * 30;
 
-            $config = null;
             if ($plan->configurations) {
                 foreach ($plan->configurations as $conf) {
                     if (abs($conf['tenure_days'] - $targetDays) <= 5) {
@@ -428,12 +428,7 @@ class LoanController extends Controller
                 // Dynamic Fees from JSON
                 $fees = $config['fees'] ?? [];
                 foreach ($fees as $fee) {
-                    // We sum up all fees for now into a generic pile, or map them?
-                    // The logic below just sums them.
                     $processingFee += $fee['amount']; 
-                    // Note: original logic had separte fields. Now we just care about total payable?
-                    // Or do we need to store them separately? 
-                    // For now, let's just add to total fees.
                 }
                 
                 // Interest
@@ -445,63 +440,88 @@ class LoanController extends Controller
                      $interestAmount = ($amount * ($effectiveRate / 100)) * $months;
                 }
                 
-                $gstAmount = round($amount * 0.18); // Keep 18% rule?
+                $gstAmount = round($amount * 0.18); // Keep 18% rule
                 
-                // Fees are ADDED to Repayment Schedule.
-                // Repayment = Principal + Fees + GST + Interest
                 $totalPayable = $loan->amount + $processingFee + $gstAmount + $interestAmount;
 
             } else {
-                 // Fallback if config not found (shouldn't happen if validated)
+                 // Fallback
                  $totalPayable = $loan->amount; 
+                 $targetDays = $targetDays ?? ($tenureMonths * 30); // Ensure targetDays is set
             }
             
         } else {
-            // Legacy Logic (Hardcoded Fallback)
-            // Assuming legacy was also intended to be Principal + Interest (which was 0 for small loans)
+            // Legacy Logic
             $totalPayable = $loan->amount;
+            $targetDays = $tenureMonths * 30;
         }
 
-        $totalEmis = 0;
-        $intervalDays = 0;
+        // --- Improved Frequency Parsing ---
+        $intervalDays = 30; // Default
 
-        if ($frequency === 'DAILY') {
+        if (str_contains($frequency, 'DAILY')) {
             $intervalDays = 1;
-        } elseif ($frequency === 'WEEKLY') {
+        } elseif (str_contains($frequency, 'WEEKLY')) {
             $intervalDays = 7;
-        } elseif ($frequency === 'MONTHLY') {
+        } elseif (str_contains($frequency, 'MONTHLY')) {
             $intervalDays = 30;
-        } elseif (preg_match('/(\d+)\s*DAYS?/', $frequency, $matches)) {
+        } elseif (preg_match('/^(\d+)\s*DAYS?$/', trim($frequency), $matches)) {
             $intervalDays = (int)$matches[1];
         } else {
-            // Default to monthly if unknown
-            $intervalDays = 30;
+            // Try to extract just the number if it's messy
+             if (preg_match('/(\d+)/', $frequency, $matches)) {
+                 $intervalDays = (int)$matches[1];
+             }
+        }
+        
+        if ($intervalDays <= 0) $intervalDays = 30;
+
+        // --- Modulo Logic ---
+        // Use config days if available, else calculated targetDays
+        $totalTenureDays = ($config && isset($config['tenure_days'])) ? $config['tenure_days'] : $targetDays;
+        
+        if (!$totalTenureDays || $totalTenureDays <= 0) {
+            $totalTenureDays = $tenureMonths * 30; // Absolute fallback
         }
 
-        // Calculate total EMIs
-        if ($plan && isset($config)) {
-            // Use config days if available
-            $totalDays = $config['tenure_days'];
-            $totalEmis = floor($totalDays / $intervalDays);
-        } else {
-            // Legacy: Based on 30 days per month
-            $totalEmis = floor(($tenureMonths * 30) / $intervalDays);
-        }
+        $fullIntervals = floor($totalTenureDays / $intervalDays);
+        $remainderDays = $totalTenureDays % $intervalDays;
+        
+        $totalEmis = $fullIntervals + ($remainderDays > 0 ? 1 : 0);
         
         if ($totalEmis <= 0) $totalEmis = 1;
 
-        // Integer-based distribution to avoid floating point issues
+        // Spread Amount
         $baseEmi = floor($totalPayable / $totalEmis);
-        $remainder = $totalPayable % $totalEmis;
+        $remainderAmount = $totalPayable % $totalEmis;
 
-        for ($i = 1; $i <= $totalEmis; $i++) {
-            // Add +1 to the first N installments where N is the remainder
-            $currentEmiAmount = $baseEmi + ($i <= $remainder ? 1 : 0);
+        $startDate = Carbon::now();
 
+        // 1. Create Full Interval EMIs
+        for ($i = 1; $i <= $fullIntervals; $i++) {
+            // Add +1 to first N
+            $currentEmiAmount = $baseEmi + ($i <= $remainderAmount ? 1 : 0);
+            
             LoanRepayment::create([
                 'loan_id' => $loan->id,
                 'amount' => $currentEmiAmount,
-                'due_date' => Carbon::now()->addDays($i * $intervalDays)->toDateString(),
+                'due_date' => $startDate->copy()->addDays($i * $intervalDays)->toDateString(),
+                'status' => 'PENDING'
+            ]);
+        }
+        
+        // 2. Create Remainder EMI if needed
+        if ($remainderDays > 0) {
+            // The index of this EMI is $fullIntervals + 1
+            $i = $fullIntervals + 1;
+            $currentEmiAmount = $baseEmi + ($i <= $remainderAmount ? 1 : 0);
+            
+            // Due date is strictly the END of the tenure
+            // i.e. start + totalTenureDays
+            LoanRepayment::create([
+                'loan_id' => $loan->id,
+                'amount' => $currentEmiAmount,
+                'due_date' => $startDate->copy()->addDays($totalTenureDays)->toDateString(),
                 'status' => 'PENDING'
             ]);
         }
