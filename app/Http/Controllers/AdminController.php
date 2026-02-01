@@ -14,12 +14,28 @@ class AdminController extends Controller
         $this->walletService = $walletService;
     }
 
-    public function getLogs()
+    public function getLogs(Request $request)
     {
-        $logs = DB::table('admin_logs')
-            ->orderBy('created_at', 'desc')
-            ->limit(50)
-            ->get();
+        $query = DB::table('admin_logs as al')
+            ->join('users as u', 'al.admin_id', '=', 'u.id')
+            ->select('al.*', 'u.name as admin_name', 'u.mobile_number as admin_mobile')
+            ->orderBy('al.created_at', 'desc');
+
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('u.name', 'like', "%{$search}%")
+                  ->orWhere('u.mobile_number', 'like', "%{$search}%")
+                  ->orWhere('al.action', 'like', "%{$search}%")
+                  ->orWhere('al.description', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->has('action') && $request->action !== 'ALL') {
+             $query->where('al.action', $request->action);
+        }
+
+        $logs = $query->paginate($request->get('per_page', 50));
             
         return response()->json($logs);
     }

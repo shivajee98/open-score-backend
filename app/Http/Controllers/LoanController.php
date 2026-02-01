@@ -737,20 +737,114 @@ class LoanController extends Controller
         return response()->json(['message' => 'Repayment successful', 'repayment' => $repayment, 'ref' => 'REPAY-' . strtoupper(Str::random(10))]);
     }
 
-    public function listAll()
+    public function listAll(Request $request)
     {
         if (Auth::user()->role !== 'ADMIN') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
-        // Include everything that is not yet fully finalized (DISBURSED or REJECTED)
-        return response()->json(Loan::with(['user', 'plan'])->whereNotIn('status', ['DISBURSED', 'REJECTED'])->orderBy('created_at', 'desc')->get());
+
+        $query = Loan::with(['user', 'plan']);
+
+        // Default: Pending/In-progress loans
+        $query->whereNotIn('status', ['DISBURSED', 'REJECTED', 'CLOSED', 'CANCELLED']);
+
+        if ($request->has('status') && $request->status !== 'ALL') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%")
+                         ->orWhere('mobile_number', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        return response()->json($query->orderBy('created_at', 'desc')->paginate($request->get('per_page', 50)));
     }
 
-    public function listHistory()
+    public function listHistory(Request $request)
     {
         if (Auth::user()->role !== 'ADMIN') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
-        return response()->json(Loan::with(['user', 'plan'])->whereIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED', 'CLOSED'])->orderBy('created_at', 'desc')->get());
+
+        $query = Loan::with(['user', 'plan']);
+
+        // Default: Finalized loans
+        $query->whereIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED', 'CLOSED']);
+
+        if ($request->has('status') && $request->status !== 'ALL') {
+             $query->where('status', $request->status);
+        }
+
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%")
+                         ->orWhere('mobile_number', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        if ($request->has('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        return response()->json($query->orderBy('created_at', 'desc')->paginate($request->get('per_page', 50)));
+    }
+
+    public function closeManually($id)
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $loan = Loan::findOrFail($id);
+        $loan->status = 'CLOSED';
+        $loan->closed_at = now();
+        $loan->save();
+
+        DB::table('admin_logs')->insert([
+            'admin_id' => Auth::id(),
+            'action' => 'loan_closed_manually',
+            'description' => "Manually CLOSED loan ID: {$loan->id} for user: {$loan->user_id}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Loan marked as CLOSED successfully']);
+    }
+
+    public function destroy($id)
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $loan = Loan::findOrFail($id);
+        
+        DB::transaction(function() use ($loan) {
+            // Delete repayments
+            LoanRepayment::where('loan_id', $loan->id)->delete();
+            
+            // Log before deleting
+            DB::table('admin_logs')->insert([
+                'admin_id' => Auth::id(),
+                'action' => 'loan_deleted',
+                'description' => "Deleted loan ID: {$loan->id} (Amount: {$loan->amount}) for user ID: {$loan->user_id}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $loan->delete();
+        });
+
+        return response()->json(['message' => 'Loan and its records deleted successfully']);
     }
 }

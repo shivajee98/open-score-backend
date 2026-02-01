@@ -53,6 +53,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/loans/{id}/release', [LoanController::class, 'release']);
     Route::get('/admin/loans', [LoanController::class, 'listAll']);
     Route::get('/admin/loans/history', [LoanController::class, 'listHistory']);
+    Route::post('/admin/loans/{id}/close', [LoanController::class, 'closeManually']);
+    Route::delete('/admin/loans/{id}', [LoanController::class, 'destroy']);
     Route::get('/admin/logs', [AdminController::class, 'getLogs']);
     Route::get('/logs', [AdminController::class, 'getLogs']); // Alias for frontend consistency 
     Route::get('/admin/payouts', [PaymentController::class, 'listWithdrawals']);
@@ -63,6 +65,7 @@ Route::middleware('auth:api')->group(function () {
     // Existing routes...
     Route::post('/merchant/withdraw', [PaymentController::class, 'requestWithdrawal']);
     Route::post('/wallet/request-withdrawal', [PaymentController::class, 'requestWithdrawal']); // Added for customer app
+    Route::get('/wallet/withdrawals', [PaymentController::class, 'getMyWithdrawals']);
     
     // Admin Routes
     Route::prefix('admin')->group(function () {

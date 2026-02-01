@@ -100,18 +100,58 @@ class TestWithdrawalCycle extends Command
              Http::withToken($this->adminToken)->delete("{$this->baseUrl}/admin/withdrawal-rules/{$ruleId}");
         }
 
-        // 6. Test Logs Endpoint
+        // 6. Test Admin Logs Endpoint
         $this->info("\n[4] Testing Admin Logs Endpoint...");
-        $logs = Http::withToken($this->adminToken)->get("{$this->baseUrl}/admin/logs");
+        $logs = Http::withToken($this->adminToken)->get("{$this->baseUrl}/logs"); // Using the new alias
         if ($logs->status() === 404) {
-             $this->error("Logs Endpoint returned 404! Checked: /admin/logs");
+             $this->error("Logs Endpoint returned 404! Alias /logs failed.");
         } elseif ($logs->failed()) {
              $this->error("Logs Endpoint Failed: " . $logs->body());
         } else {
              $this->info("Logs Endpoint Working. Found " . count($logs->json()) . " entries.");
         }
 
+        // 7. Test Users and Funds Section
+        $this->testAdminSections();
+
         return 0;
+    }
+
+    private function testAdminSections()
+    {
+        $this->info("\n[5] Testing Users and Funds Sections...");
+
+        // A. Users Section
+        $this->info("Checking Users Management...");
+        $usersRes = Http::withToken($this->adminToken)->get("{$this->baseUrl}/admin/users");
+        if ($usersRes->failed()) {
+            $this->error("Users List Failed: " . $usersRes->body());
+        } else {
+            $this->info("Users List Working. Count: " . count($usersRes->json()));
+        }
+
+        // B. Funds Section (Pending Transactions)
+        $this->info("Checking Pending Funds (Deposits)...");
+        $fundsRes = Http::withToken($this->adminToken)->get("{$this->baseUrl}/admin/funds/pending");
+        if ($fundsRes->failed()) {
+            $this->error("Pending Funds Failed: " . $fundsRes->body());
+        } else {
+            $this->info("Funds Section Working. Pending: " . count($fundsRes->json()));
+        }
+
+        // C. Test Manual Credit (Funds Action)
+        $this->info("Testing Manual Credit Action...");
+        $targetUser = User::where('role', 'CUSTOMER')->first();
+        if ($targetUser) {
+            $creditRes = Http::withToken($this->adminToken)->post("{$this->baseUrl}/admin/users/{$targetUser->id}/credit", [
+                'amount' => 500
+            ]);
+            if ($creditRes->successful()) {
+                $this->info("Manual Credit Requested Successfully.");
+            } else {
+                $this->warn("Manual Credit Failed: " . $creditRes->body());
+            }
+        }
     }
 
     private function createTestUser()

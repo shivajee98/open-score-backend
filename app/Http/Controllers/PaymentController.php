@@ -324,6 +324,14 @@ class PaymentController extends Controller
         return response()->json($withdraw, 201);
     }
 
+    public function getMyWithdrawals()
+    {
+        $user = Auth::user();
+        return response()->json(\App\Models\WithdrawRequest::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->get());
+    }
+
     public function listWithdrawals()
     {
         if (Auth::user()->role !== 'ADMIN') {
