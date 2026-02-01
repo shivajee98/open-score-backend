@@ -161,6 +161,134 @@ class LoanController extends Controller
         return response()->json($loan, 201);
     }
 
+    /**
+     * Calculate EMI preview without creating a loan
+     * This is the single source of truth for EMI calculations
+     */
+    public function calculatePreview(Request $request)
+    {
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'tenure_days' => 'required|integer|min:1',
+            'frequency' => 'required|string',
+            'loan_plan_id' => 'nullable|exists:loan_plans,id'
+        ]);
+
+        $amount = $request->amount;
+        $tenureDays = $request->tenure_days;
+        $frequency = strtoupper($request->frequency);
+        
+        // Parse frequency to get interval days
+        $intervalDays = $this->parseFrequencyInterval($frequency);
+        
+        // Calculate number of EMIs
+        $numEmis = max(1, floor($tenureDays / $intervalDays));
+        
+        // Get fees and interest from loan plan if provided
+        $processingFee = 0;
+        $loginFee = 0;
+        $fieldKycFee = 0;
+        $otherFees = 0;
+        $gst = 0;
+        $interestRate = 0;
+        $totalInterest = 0;
+        
+        if ($request->loan_plan_id) {
+            $plan = \App\Models\LoanPlan::find($request->loan_plan_id);
+            if ($plan && is_array($plan->configurations)) {
+                // Find matching configuration
+                foreach ($plan->configurations as $config) {
+                    if (abs(($config['tenure_days'] ?? 0) - $tenureDays) <= 5) {
+                        // Extract fees
+                        $fees = $config['fees'] ?? [];
+                        foreach ($fees as $fee) {
+                            $fAmount = (float)($fee['amount'] ?? 0);
+                            $name = strtolower($fee['name'] ?? '');
+                            
+                            if (strpos($name, 'processing') !== false) {
+                                $processingFee += $fAmount;
+                            } elseif (strpos($name, 'login') !== false) {
+                                $loginFee += $fAmount;
+                            } elseif (strpos($name, 'field') !== false || strpos($name, 'kyc') !== false) {
+                                $fieldKycFee += $fAmount;
+                            } elseif (strpos($name, 'gst') !== false) {
+                                $gst += $fAmount;
+                            } else {
+                                $otherFees += $fAmount;
+                            }
+                        }
+                        
+                        // Extract interest rate
+                        if (isset($config['interest_rates']) && is_array($config['interest_rates']) && isset($config['interest_rates'][$request->frequency])) {
+                            $interestRate = (float)$config['interest_rates'][$request->frequency];
+                        } elseif (isset($config['interest_rate'])) {
+                            $interestRate = (float)$config['interest_rate'];
+                        }
+                        
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // Calculate interest
+        $months = $tenureDays / 30;
+        $totalInterest = round(($amount * $interestRate / 100) * $months);
+        
+        // Fallback GST if not in fees
+        if ($gst == 0) {
+            $gst = round($amount * 0.18);
+        }
+        
+        // Calculate totals
+        $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
+        $totalPayable = $amount + $totalFees + $gst + $totalInterest;
+        $emiAmount = round($totalPayable / $numEmis);
+        
+        return response()->json([
+            'principal' => $amount,
+            'tenure_days' => $tenureDays,
+            'frequency' => $request->frequency,
+            'interval_days' => $intervalDays,
+            'num_emis' => $numEmis,
+            'emi_amount' => $emiAmount,
+            'processing_fee' => $processingFee,
+            'login_fee' => $loginFee,
+            'field_kyc_fee' => $fieldKycFee,
+            'other_fees' => $otherFees,
+            'gst' => $gst,
+            'interest_rate' => $interestRate,
+            'total_interest' => $totalInterest,
+            'total_payable' => $totalPayable,
+            'disbursal_amount' => $amount, // Customer gets full amount
+        ]);
+    }
+
+    /**
+     * Parse frequency string to interval days
+     * Handles: DAILY, WEEKLY, MONTHLY, "3_DAYS", "15_DAYS", etc.
+     */
+    private function parseFrequencyInterval($frequency)
+    {
+        $freq = strtoupper($frequency);
+        
+        if ($freq === 'DAILY') {
+            return 1;
+        } elseif ($freq === 'WEEKLY') {
+            return 7;
+        } elseif ($freq === 'MONTHLY') {
+            return 30;
+        } else {
+            // Match patterns like "3_DAYS", "15_DAYS", "3 DAYS", "15 DAYS"
+            if (preg_match('/(\d+)[\s_]*DAYS?/i', $freq, $matches)) {
+                return (int)$matches[1];
+            }
+        }
+        
+        // Default to monthly if can't parse
+        return 30;
+    }
+
     public function confirm(Request $request, $id)
     {
         $loan = Loan::with('plan')->findOrFail($id);
