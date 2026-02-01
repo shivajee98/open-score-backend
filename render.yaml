@@ -1,27 +1,21 @@
 services:
   - type: web
     name: open-score-backend
-    env: php
-    region: oregon
+    runtime: php
     plan: free
-    buildCommand: |
-      composer install --no-dev --optimize-autoloader
-      php artisan config:cache
-      php artisan route:cache
-    startCommand: |
-      php artisan migrate --force
-      php artisan serve --host=0.0.0.0 --port=$PORT
+    buildCommand: bash build.sh
+    startCommand: bash start.sh
     envVars:
       - key: APP_ENV
         value: production
       - key: APP_KEY
-        sync: false  # Set this in Render dashboard
+        sync: false
       - key: APP_DEBUG
-        value: false
+        value: "false"
       - key: DB_CONNECTION
         value: mysql
       - key: DB_HOST
-        sync: false  # Set this in Render dashboard
+        sync: false
       - key: DB_DATABASE
         sync: false
       - key: DB_USERNAME
