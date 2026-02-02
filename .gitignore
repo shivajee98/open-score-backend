@@ -1,3 +1,4 @@
 vendor
 .env
 storage/*.key
+app/Console/Commands/ResetDatabaseData.php
