@@ -36,8 +36,8 @@ class MerchantController extends Controller
             }
         }
 
-        $merchants = $query->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number')
-                           ->get(); // Limit?
+        $merchants = $query->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'business_nature', 'description', 'location_url', 'profile_image')
+                           ->get();
 
         return response()->json($merchants);
     }
@@ -46,7 +46,7 @@ class MerchantController extends Controller
     {
         $merchant = User::where('role', 'MERCHANT')
                         ->where('id', $id)
-                        ->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'email')
+                        ->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'email', 'business_nature', 'description', 'location_url', 'profile_image')
                         ->firstOrFail();
 
         return response()->json($merchant);

@@ -56,11 +56,55 @@ class SubUserController extends Controller
     public function show($id)
     {
         $subUser = SubUser::findOrFail($id);
+        
+        // Basic Stats
         $referredUsers = User::where('sub_user_id', $id)->get();
+        $referredUserIds = $referredUsers->pluck('id');
+        
+        $customerCount = $referredUsers->where('role', 'CUSTOMER')->count();
+        $merchantCount = $referredUsers->where('role', 'MERCHANT')->count();
+
+        // Loans Stats
+        $loans = Loan::whereIn('user_id', $referredUserIds)->get();
+        $totalLoansCount = $loans->count();
+        $approvedLoansCount = $loans->where('status', 'APPROVED')->count();
+        $disbursedLoansCount = $loans->where('status', 'DISBURSED')->count();
+        $totalLoanVolume = $loans->whereIn('status', ['APPROVED', 'DISBURSED', 'CLOSED'])->sum('amount');
+
+        // Recent Activity
+        $recentUsers = User::where('sub_user_id', $id)
+            ->orderBy('created_at', 'desc')
+            ->limit(10)
+            ->get();
+
+        $recentTransactions = \App\Models\WalletTransaction::whereIn('user_id', $referredUserIds)
+            ->with('user:id,name,business_name,role')
+            ->orderBy('created_at', 'desc')
+            ->limit(15)
+            ->get();
+
+        $recentLoans = Loan::whereIn('user_id', $referredUserIds)
+            ->with('user:id,name,business_name,role')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
         
         return response()->json([
             'sub_user' => $subUser,
-            'referred_users' => $referredUsers
+            'stats' => [
+                'total_users' => $referredUsers->count(),
+                'customers' => $customerCount,
+                'merchants' => $merchantCount,
+                'loans' => [
+                    'total' => $totalLoansCount,
+                    'approved' => $approvedLoansCount,
+                    'disbursed' => $disbursedLoansCount,
+                    'volume' => $totalLoanVolume
+                ]
+            ],
+            'recent_users' => $recentUsers,
+            'recent_transactions' => $recentTransactions,
+            'recent_loans' => $recentLoans
         ]);
     }
 
