@@ -167,4 +167,13 @@ class Loan extends Model
     {
         return $this->belongsTo(LoanPlan::class, 'loan_plan_id');
     }
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function disburser()
+    {
+        return $this->belongsTo(User::class, 'disbursed_by');
+    }
 }

@@ -54,6 +54,9 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/loans/{id}/release', [LoanController::class, 'release']);
     Route::get('/admin/loans', [LoanController::class, 'listAll']);
     Route::get('/admin/loans/history', [LoanController::class, 'listHistory']);
+    Route::get('/admin/loans/{id}/details', [LoanController::class, 'getDetails']); // New
+    Route::post('/admin/loans/repayments/{id}/manual-collect', [LoanController::class, 'manualCollect']); // New
+    Route::post('/admin/loans/repayments/{id}/approve', [LoanController::class, 'approveManualCollect']); // New
     Route::post('/admin/loans/{id}/close', [LoanController::class, 'closeManually']);
     Route::delete('/admin/loans/{id}', [LoanController::class, 'destroy']);
     Route::get('/admin/logs', [AdminController::class, 'getLogs']);

@@ -799,6 +799,99 @@ class LoanController extends Controller
         return response()->json($query->orderBy('amount', 'asc')->paginate($request->get('per_page', 50)));
     }
 
+    public function getDetails($id)
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $loan = Loan::with(['user', 'plan', 'approver', 'disburser'])->findOrFail($id);
+        
+        $repayments = LoanRepayment::where('loan_id', $id)
+            ->with('collector')
+            ->orderBy('due_date', 'asc')
+            ->get();
+            
+        return response()->json([
+            'loan' => $loan,
+            'repayments' => $repayments
+        ]);
+    }
+
+    public function manualCollect(Request $request, $repaymentId)
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'amount' => 'required|numeric',
+            'notes' => 'nullable|string'
+        ]);
+
+        $repayment = LoanRepayment::findOrFail($repaymentId);
+        
+        if ($repayment->status === 'PAID') {
+            return response()->json(['error' => 'Already paid'], 400);
+        }
+
+        $repayment->payment_mode = 'MANUAL';
+        $repayment->collected_by = Auth::id();
+        $repayment->notes = $request->notes;
+        $repayment->status = 'MANUAL_VERIFICATION'; 
+        // We set it to MANUAL_VERIFICATION first so another admin or header can approve? 
+        // Or if Admin does it, is it auto approved? 
+        // Plan said: "Enter amt -> Submit -> Approved by admin". 
+        // If the current user IS admin, maybe we can just mark it paid or keep it as verification state?
+        // Let's stick to the plan: "After submit approved by admin" -> implies 2 status.
+        
+        $repayment->save();
+
+        return response()->json($repayment);
+    }
+
+    public function approveManualCollect($repaymentId)
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $repayment = LoanRepayment::findOrFail($repaymentId);
+
+        if ($repayment->status !== 'MANUAL_VERIFICATION') {
+            return response()->json(['error' => 'Invalid status for approval'], 400);
+        }
+
+        DB::transaction(function () use ($repayment) {
+            $repayment->status = 'PAID';
+            $repayment->paid_at = now();
+            $repayment->save();
+
+            $loan = Loan::findOrFail($repayment->loan_id);
+            $loan->increment('paid_amount', $repayment->amount);
+            
+            // Check if all repayments are completed
+            $pendingCount = LoanRepayment::where('loan_id', $loan->id)
+                ->where('status', 'PENDING')
+                ->where('status', '!=', 'PAID') // Just to be safe
+                ->count();
+            
+            // Actually stricter check:
+            $unpaidCount = LoanRepayment::where('loan_id', $loan->id)
+                ->where('status', '!=', 'PAID')
+                ->count();
+
+            if ($unpaidCount === 0) {
+                $loan->status = 'CLOSED';
+                $loan->closed_at = now();
+                $loan->save();
+            }
+        });
+
+        return response()->json($repayment);
+    }
+
+
     public function closeManually($id)
     {
         if (Auth::user()->role !== 'ADMIN') {

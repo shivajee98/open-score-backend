@@ -11,7 +11,12 @@ class LoanRepayment extends Model
         'amount',
         'due_date',
         'paid_at',
-        'status'
+        'status',
+        'payment_mode',
+        'collected_by',
+        'notes',
+        'proof_image',
+        'is_manual_collection'
     ];
 
     protected $appends = ['display_id'];
@@ -24,5 +29,10 @@ class LoanRepayment extends Model
     public function loan()
     {
         return $this->belongsTo(Loan::class);
+    }
+    
+    public function collector()
+    {
+        return $this->belongsTo(User::class, 'collected_by');
     }
 }
