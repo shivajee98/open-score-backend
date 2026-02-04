@@ -148,29 +148,45 @@ class SubUserController extends Controller
 
     public function login(Request $request)
     {
-        $request->validate([
-            'mobile_number' => 'required|string',
-            'otp' => 'required|string'
-        ]);
+        $mobile = trim($request->mobile_number);
+        $otp = trim((string)$request->otp);
 
-        $subUser = SubUser::where('mobile_number', $request->mobile_number)->first();
+        \Illuminate\Support\Facades\Log::info('Sub-User Login Attempt:', ['mobile' => $mobile, 'otp' => $otp]);
 
-        // Allow generic OTP '123456' for any Agent for demo
-        if (!$subUser || (string)$request->otp !== '123456') {
-            return response()->json(['error' => 'Invalid Agent Credentials'], 401);
+        $subUser = SubUser::where('mobile_number', $mobile)->first();
+        
+        if (!$subUser) {
+            \Illuminate\Support\Facades\Log::warning('Agent not found in Database');
+            return response()->json(['error' => 'Agent account not found'], 401);
+        }
+
+        // Demo OTP check
+        if ($otp !== '123456') {
+            \Illuminate\Support\Facades\Log::warning('Invalid OTP provided');
+            return response()->json(['error' => 'Invalid OTP'], 401);
         }
 
         if (!$subUser->is_active) {
-            return response()->json(['error' => 'Account is inactive'], 403);
+            return response()->json(['error' => 'Account is deactivated'], 403);
         }
 
-        $token = Auth::guard('sub-user')->login($subUser);
+        try {
+            // Force login without password check for agents (demo)
+            $token = auth('sub-user')->login($subUser);
+            
+            if (!$token) {
+                return response()->json(['error' => 'Token generation failed'], 500);
+            }
 
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'bearer',
-            'sub_user' => $subUser
-        ]);
+            return response()->json([
+                'access_token' => $token,
+                'token_type' => 'bearer',
+                'sub_user' => $subUser
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('JWT Login Error: ' . $e->getMessage());
+            return response()->json(['error' => 'Authentication system error'], 500);
+        }
     }
 
     public function getReferralStats($id)
