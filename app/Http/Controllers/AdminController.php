@@ -322,4 +322,40 @@ class AdminController extends Controller
 
         return response()->json(['message' => 'Cashback settings updated successfully for selected users.']);
     }
+    
+    public function getCashbackSettings()
+    {
+        $settings = \App\Models\SignupCashbackSetting::all();
+        return response()->json($settings);
+    }
+    
+    public function updateCashbackSetting(Request $request, $role)
+    {
+        $request->validate([
+            'cashback_amount' => 'required|numeric|min:0',
+            'is_active' => 'nullable|boolean'
+        ]);
+        
+        $setting = \App\Models\SignupCashbackSetting::where('role', strtoupper($role))->first();
+        
+        if (!$setting) {
+            return response()->json(['error' => 'Setting not found'], 404);
+        }
+        
+        $setting->cashback_amount = $request->cashback_amount;
+        if ($request->has('is_active')) {
+            $setting->is_active = $request->is_active;
+        }
+        $setting->save();
+        
+        DB::table('admin_logs')->insert([
+            'admin_id' => \Illuminate\Support\Facades\Auth::id(),
+            'action' => 'update_signup_cashback',
+            'description' => "Updated {$role} signup cashback to ₹{$request->cashback_amount}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        
+        return response()->json(['message' => 'Cashback setting updated successfully', 'setting' => $setting]);
+    }
 }

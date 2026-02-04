@@ -140,4 +140,19 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/referrals', [\App\Http\Controllers\ReferralController::class, 'index']);
     Route::post('/admin/referrals', [\App\Http\Controllers\ReferralController::class, 'store']);
     Route::get('/admin/referrals/{id}', [\App\Http\Controllers\ReferralController::class, 'show']);
+    
+    // Sub-User Management
+    Route::get('/admin/sub-users', [\App\Http\Controllers\SubUserController::class, 'index']);
+    Route::post('/admin/sub-users', [\App\Http\Controllers\SubUserController::class, 'store']);
+    Route::get('/admin/sub-users/{id}', [\App\Http\Controllers\SubUserController::class, 'show']);
+    Route::put('/admin/sub-users/{id}', [\App\Http\Controllers\SubUserController::class, 'update']);
+    Route::post('/admin/sub-users/{id}/credit', [\App\Http\Controllers\SubUserController::class, 'addCredit']);
+    Route::get('/admin/sub-users/{id}/stats', [\App\Http\Controllers\SubUserController::class, 'getReferralStats']);
+    
+    // Signup Cashback Settings
+    Route::get('/admin/cashback-settings', [\App\Http\Controllers\AdminController::class, 'getCashbackSettings']);
+    Route::put('/admin/cashback-settings/{role}', [\App\Http\Controllers\AdminController::class, 'updateCashbackSetting']);
+    
+    // Sub-User Login
+    Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::class, 'login']);
 });

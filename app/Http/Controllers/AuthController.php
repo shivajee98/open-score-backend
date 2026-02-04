@@ -58,15 +58,36 @@ class AuthController extends Controller
                  
                  // Handle Referral Logic for New User
                  $referralCampaignId = null;
+                 $subUserId = null;
                  $cashbackAmount = 0;
+                 
                  if ($referralCode) {
-                    $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
+                    // Check if it's a sub-user referral code
+                    $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
                         ->where('is_active', true)
                         ->first();
-                    if ($campaign) {
-                        $referralCampaignId = $campaign->id;
-                        $cashbackAmount = $campaign->cashback_amount;
+                    
+                    if ($subUser) {
+                        $subUserId = $subUser->id;
+                        $cashbackAmount = $subUser->default_signup_amount;
+                    } else {
+                        // Check regular referral campaign
+                        $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
+                            ->where('is_active', true)
+                            ->first();
+                        if ($campaign) {
+                            $referralCampaignId = $campaign->id;
+                            $cashbackAmount = $campaign->cashback_amount;
+                        }
                     }
+                 } else {
+                     // Get default signup cashback from settings
+                     $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $role)
+                         ->where('is_active', true)
+                         ->first();
+                     if ($cashbackSetting) {
+                         $cashbackAmount = $cashbackSetting->cashback_amount;
+                     }
                  }
 
                  // Create new user (Customer/Merchant)
@@ -76,23 +97,41 @@ class AuthController extends Controller
                      'status' => 'ACTIVE',
                      'is_onboarded' => false,
                      'password' => bcrypt('password'),
-                     'referral_campaign_id' => $referralCampaignId
+                     'referral_campaign_id' => $referralCampaignId,
+                     'sub_user_id' => $subUserId
                  ]);
 
                  // Create Wallet for new user
                  $walletService = app(\App\Services\WalletService::class);
                  $walletService->createWallet($user->id);
 
-                 // Credit Referral Bonus
+                 // Credit Referral/Signup Bonus
                  if ($cashbackAmount > 0) {
                      $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
-                     $walletService->credit(
-                         $wallet->id,
-                         $cashbackAmount,
-                         'REFERRAL_BONUS',
-                         $user->id,
-                         "Welcome Bonus from code: {$referralCode}"
-                     );
+                     
+                     // If sub-user referral, deduct from sub-user credit
+                     if ($subUserId && $subUser) {
+                         if ($subUser->credit_balance >= $cashbackAmount) {
+                             $subUser->credit_balance -= $cashbackAmount;
+                             $subUser->save();
+                             
+                             $walletService->credit(
+                                 $wallet->id,
+                                 $cashbackAmount,
+                                 'SUB_USER_REFERRAL_BONUS',
+                                 $user->id,
+                                 "Welcome Bonus from sub-user: {$subUser->name}"
+                             );
+                         }
+                     } else {
+                         $walletService->credit(
+                             $wallet->id,
+                             $cashbackAmount,
+                             $referralCampaignId ? 'REFERRAL_BONUS' : 'SIGNUP_BONUS',
+                             $user->id,
+                             $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : 'Signup Welcome Bonus'
+                         );
+                     }
                  }
 
              } else {
@@ -202,19 +241,22 @@ class AuthController extends Controller
             $walletService->setPin($wallet->id, $request->pin);
         }
 
-        // Credit 250 Bonus (Check if already credited?)
-        // Ideally we should have a flag or transaction check. 
-        // For now, assuming this is a one-time profile completion action.
-        // Let's check if they already have business details set, but we are overwriting, so maybe check transaction history?
-        // Simpler: Just credit it. The frontend hides the button after completion.
+        // Credit merchant onboarding bonus from settings
+        $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'MERCHANT')
+            ->where('is_active', true)
+            ->first();
         
-        $walletService->credit(
-            $wallet->id, 
-            250.00, 
-            'ONBOARDING_BONUS', 
-            $user->id, 
-            'Welcome bonus for Merchant Profile Completion'
-        );
+        $bonusAmount = $cashbackSetting ? $cashbackSetting->cashback_amount : 250;
+        
+        if ($bonusAmount > 0) {
+            $walletService->credit(
+                $wallet->id, 
+                $bonusAmount, 
+                'ONBOARDING_BONUS', 
+                $user->id, 
+                'Welcome bonus for Merchant Profile Completion'
+            );
+        }
 
         // Generate fresh token with updated is_onboarded claim
         $token = Auth::guard('api')->login($user);
