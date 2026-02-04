@@ -454,7 +454,8 @@ class LoanController extends Controller
                 'bank_name', 
                 'ifsc_code', 
                 'account_holder_name', 
-                'account_number'
+                'account_number',
+                'location_url'
             ]));
         }
 
