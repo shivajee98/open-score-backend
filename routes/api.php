@@ -158,3 +158,8 @@ Route::middleware('auth:api')->group(function () {
 
 // Sub-User Login (Public)
 Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::class, 'login']);
+
+// Sub-User Protected Routes
+Route::middleware('auth:sub-user')->group(function () {
+    Route::get('/admin/sub-users/{id}/stats', [\App\Http\Controllers\SubUserController::class, 'getReferralStats']);
+});

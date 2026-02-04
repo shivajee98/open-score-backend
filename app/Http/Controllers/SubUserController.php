@@ -171,11 +171,15 @@ class SubUserController extends Controller
         }
 
         try {
-            // Force login without password check for agents (demo)
-            $token = auth('sub-user')->login($subUser);
+            // Use standard attempt with mobile and fixed password (which we set as the OTP)
+            $token = auth('sub-user')->attempt([
+                'mobile_number' => $mobile,
+                'password' => $otp
+            ]);
             
             if (!$token) {
-                return response()->json(['error' => 'Token generation failed'], 500);
+                \Illuminate\Support\Facades\Log::warning('Login attempt failed for:', ['mobile' => $mobile]);
+                return response()->json(['error' => 'Invalid OTP'], 401);
             }
 
             return response()->json([
