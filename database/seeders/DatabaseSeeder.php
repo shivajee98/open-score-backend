@@ -46,5 +46,18 @@ class DatabaseSeeder extends Seeder
                 'status' => 'ACTIVE'
             ]);
         }
+
+        // Demo Agent (Sub-User)
+        \App\Models\SubUser::create([
+            'name' => 'Demo Agent',
+            'mobile_number' => '8888888888',
+            'email' => 'agent@demo.com',
+            'password' => bcrypt('password'),
+            'referral_code' => 'DEMOAGENT',
+            'credit_balance' => 0,
+            'credit_limit' => 50000,
+            'default_signup_amount' => 250,
+            'is_active' => true
+        ]);
     }
 }

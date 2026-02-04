@@ -31,7 +31,7 @@ class SubUserController extends Controller
             'name' => 'required|string|max:255',
             'mobile_number' => 'required|string|unique:sub_users,mobile_number',
             'email' => 'nullable|email',
-            'password' => 'required|string|min:6',
+            'password' => 'nullable|string|min:6',
             'credit_limit' => 'required|numeric|min:0',
             'default_signup_amount' => 'required|numeric|min:0'
         ]);
@@ -42,7 +42,7 @@ class SubUserController extends Controller
             'name' => $request->name,
             'mobile_number' => $request->mobile_number,
             'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'password' => Hash::make($request->password ?? 'password'),
             'referral_code' => $referralCode,
             'credit_balance' => 0,
             'credit_limit' => $request->credit_limit,
@@ -106,13 +106,14 @@ class SubUserController extends Controller
     {
         $request->validate([
             'mobile_number' => 'required|string',
-            'password' => 'required|string'
+            'otp' => 'required|string'
         ]);
 
         $subUser = SubUser::where('mobile_number', $request->mobile_number)->first();
 
-        if (!$subUser || !Hash::check($request->password, $subUser->password)) {
-            return response()->json(['error' => 'Invalid credentials'], 401);
+        // Allow generic OTP '123456' for any Agent for demo
+        if (!$subUser || $request->otp !== '123456') {
+            return response()->json(['error' => 'Invalid Agent Credentials'], 401);
         }
 
         if (!$subUser->is_active) {
