@@ -23,6 +23,7 @@ Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 
 
 Route::middleware('auth:api')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::put('/auth/me/update', [AuthController::class, 'updateProfile']);
     Route::post('/auth/onboarding', [AuthController::class, 'completeOnboarding']);
     
     // Wallet

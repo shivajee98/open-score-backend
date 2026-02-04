@@ -303,6 +303,7 @@ class AuthController extends Controller
             'email' => 'nullable|email|unique:users,email,' . Auth::id(),
             'pincode' => 'nullable|string|max:10',
             'city' => 'nullable|string|max:255',
+            'business_address' => 'nullable|string|max:500',
             'bank_name' => 'nullable|string|max:255',
             'account_number' => 'nullable|string|max:50',
             'ifsc_code' => 'nullable|string|max:20',
@@ -314,6 +315,7 @@ class AuthController extends Controller
         if ($request->email) $user->email = $request->email;
         if ($request->pincode) $user->pincode = $request->pincode;
         if ($request->city) $user->city = $request->city;
+        if ($request->business_address) $user->business_address = $request->business_address;
         
         // Only allow bank details update if not already set
         if (!$user->account_number) {
