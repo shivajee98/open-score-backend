@@ -260,7 +260,11 @@ class AuthController extends Controller
             'name' => 'nullable|string|max:255',
             'email' => 'nullable|email|unique:users,email,' . Auth::id(),
             'pincode' => 'nullable|string|max:10',
-            'city' => 'nullable|string|max:255'
+            'city' => 'nullable|string|max:255',
+            'bank_name' => 'nullable|string|max:255',
+            'account_number' => 'nullable|string|max:50',
+            'ifsc_code' => 'nullable|string|max:20',
+            'account_holder_name' => 'nullable|string|max:255'
         ]);
 
         $user = \App\Models\User::find(Auth::id());
@@ -268,6 +272,15 @@ class AuthController extends Controller
         if ($request->email) $user->email = $request->email;
         if ($request->pincode) $user->pincode = $request->pincode;
         if ($request->city) $user->city = $request->city;
+        
+        // Only allow bank details update if not already set
+        if (!$user->account_number) {
+            if ($request->bank_name) $user->bank_name = $request->bank_name;
+            if ($request->account_number) $user->account_number = $request->account_number;
+            if ($request->ifsc_code) $user->ifsc_code = strtoupper($request->ifsc_code);
+            if ($request->account_holder_name) $user->account_holder_name = $request->account_holder_name;
+        }
+        
         $user->save();
 
         return response()->json(['message' => 'Profile updated successfully', 'user' => $user]);
