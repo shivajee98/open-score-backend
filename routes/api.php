@@ -154,6 +154,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/cashback-settings', [\App\Http\Controllers\AdminController::class, 'getCashbackSettings']);
     Route::put('/admin/cashback-settings/{role}', [\App\Http\Controllers\AdminController::class, 'updateCashbackSetting']);
     
-    // Sub-User Login
-    Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::class, 'login']);
 });
+
+// Sub-User Login (Public)
+Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::class, 'login']);
