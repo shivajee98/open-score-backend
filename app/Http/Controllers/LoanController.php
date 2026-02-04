@@ -373,14 +373,52 @@ class LoanController extends Controller
             return response()->json(['error' => 'Can only send KYC from PROCEEDED, KYC_SENT, or FORM_SUBMITTED state'], 400);
         }
 
-        // Always generate a token if it's missing or if we want to refresh it
-        // For now, let's only generate if missing or explicitly asked (though here we just always ensure it exists)
+        // Check if user has already completed KYC (has bank details)
+        $user = \App\Models\User::find($loan->user_id);
+        $hasCompletedKyc = $user && !empty($user->bank_name) && !empty($user->account_number);
+
+        if ($hasCompletedKyc) {
+            // User has already filled KYC before - auto-submit this loan's KYC
+            $loan->status = 'FORM_SUBMITTED';
+            $loan->kyc_submitted_at = now();
+            $loan->form_data = [
+                'bank_name' => $user->bank_name,
+                'ifsc_code' => $user->ifsc_code,
+                'account_holder_name' => $user->account_holder_name,
+                'account_number' => $user->account_number,
+                'location_url' => $user->location_url,
+                'auto_filled' => true,
+                'note' => 'KYC data reused from previous submission'
+            ];
+            $loan->save();
+
+            // Reflect loan amount in wallet as LOCKED (PENDING status)
+            $wallet = $this->walletService->getWallet($loan->user_id);
+            if (!$wallet) $wallet = $this->walletService->createWallet($loan->user_id);
+            
+            $this->walletService->credit(
+                $wallet->id, 
+                $loan->amount, 
+                'LOAN', 
+                $loan->id, 
+                "Loan Disbursal (Pending Final Approval)", 
+                'PENDING'
+            );
+
+            return response()->json([
+                'loan' => $loan,
+                'message' => 'KYC already completed by user. Form auto-submitted.',
+                'auto_submitted' => true
+            ]);
+        }
+
+        // User hasn't completed KYC - send the form link
         if (!$loan->kyc_token) {
             $loan->kyc_token = (string) Str::uuid();
         }
         
         $loan->status = 'KYC_SENT';
-        $loan->kyc_sent_by = Auth::id(); // Capture who sent it
+        $loan->kyc_sent_by = Auth::id();
         $loan->save();
 
         // Reflect loan amount in wallet as LOCKED (PENDING status)
@@ -428,14 +466,13 @@ class LoanController extends Controller
     {
         $loan = Loan::where('kyc_token', $token)->firstOrFail();
 
-        if ($loan->status === 'FORM_SUBMITTED' || $loan->kyc_submitted_at) {
-            return response()->json(['error' => 'Already submitted'], 400);
-        }
+        $alreadySubmitted = $loan->status === 'FORM_SUBMITTED' || $loan->kyc_submitted_at;
 
         return response()->json([
             'loan_id' => $loan->id,
             'amount' => $loan->amount,
-            'status' => $loan->status
+            'status' => $loan->status,
+            'kyc_submitted' => $alreadySubmitted
         ]);
     }
 

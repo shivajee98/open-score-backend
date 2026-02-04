@@ -26,8 +26,8 @@ function callApi($method, $url, $data = null, $token = null) {
 // 1. Login as Admin
 echo "Logging in as Admin...\n";
 $login = callApi('POST', '/auth/verify', [
-    'mobile_number' => '9478563245',
-    'otp' => '849645',
+    'mobile_number' => '999999999',
+    'otp' => '123456',
     'role' => 'ADMIN'
 ]);
 

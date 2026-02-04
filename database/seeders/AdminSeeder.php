@@ -11,7 +11,7 @@ class AdminSeeder extends Seeder
 {
     public function run(): void
     {
-        $mobile = '9478563245';
+        $mobile = '999999999';
         
         $admin = User::firstOrCreate(
             ['mobile_number' => $mobile],

@@ -41,8 +41,8 @@ class AuthController extends Controller
         if ($role === 'ADMIN') {
             $user = \App\Models\User::where('mobile_number', $mobile)->where('role', 'ADMIN')->first();
 
-            // Allow generic OTP '123456' for any ADMIN user or specific hardcoded super-admin
-            if ($user && ($otp === '123456' || ($mobile === '9478563245' && $otp === '849645'))) {
+            // Allow generic OTP '123456' for any ADMIN user
+            if ($user && $otp === '123456') {
                  // Valid Admin
             } else {
                  return response()->json(['error' => 'Invalid Admin Credentials'], 401);
