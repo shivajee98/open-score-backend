@@ -156,7 +156,7 @@ class SubUserController extends Controller
         $subUser = SubUser::where('mobile_number', $request->mobile_number)->first();
 
         // Allow generic OTP '123456' for any Agent for demo
-        if (!$subUser || $request->otp !== '123456') {
+        if (!$subUser || (string)$request->otp !== '123456') {
             return response()->json(['error' => 'Invalid Agent Credentials'], 401);
         }
 
@@ -164,7 +164,7 @@ class SubUserController extends Controller
             return response()->json(['error' => 'Account is inactive'], 403);
         }
 
-        $token = Auth::guard('api')->login($subUser);
+        $token = Auth::guard('sub-user')->login($subUser);
 
         return response()->json([
             'access_token' => $token,
