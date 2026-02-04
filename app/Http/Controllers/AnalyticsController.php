@@ -27,9 +27,42 @@ class AnalyticsController extends Controller
         // Money Flow High Level
         $totalMerchantTransfer = WalletTransaction::where('source_type', 'QR_PAYMENT')->sum('amount');
         
+        // New Metric: Amount to be recovered (Outstanding Principal + Interest - Paid)
+        // Simplest: Sum of (Net Payable - Paid Amount) for all DISBURSED loans
+        // Net Payable is calculated on the fly in Model accessor. We can't sum it easily in SQL.
+        // Approx: Sum(amount) - Sum(paid_amount) of active loans. 
+        // More Accurate: Sum of PENDING repayments for DISBURSED loans.
+        $totalOutstanding = LoanRepayment::whereHas('loan', function($q) {
+            $q->where('status', 'DISBURSED');
+        })->where('status', 'PENDING')->sum('amount');
+
+        // New Metric: Overdue Amount
+        $totalOverdue = LoanRepayment::where('status', 'PENDING')
+                                     ->where('due_date', '<', now())
+                                     ->sum('amount');
+
+        // Recent Repayments
+        $recentRepayments = LoanRepayment::where('status', 'PAID')
+            ->with(['loan.user', 'loan']) // Eager load user via loan
+            ->orderBy('paid_at', 'desc')
+            ->take(5)
+            ->get()
+            ->map(function($r) {
+                return [
+                    'id' => $r->id,
+                    'user_name' => $r->loan->user->name ?? 'Unknown',
+                    'user_mobile' => $r->loan->user->mobile_number ?? '',
+                    'amount' => $r->amount,
+                    'paid_at' => $r->paid_at,
+                    'mode' => $r->payment_mode ?? 'ONLINE'
+                ];
+            });
+
         return response()->json([
             'total_disbursed' => $totalDisbursed,
             'total_repaid' => $totalRepaid,
+            'total_outstanding' => $totalOutstanding,
+            'total_overdue' => $totalOverdue,
             'active_loans' => $activeLoansCount,
             'completed_loans' => $completedLoansCount,
             'defaulted_loans' => $defaultedLoansCount,
@@ -37,6 +70,7 @@ class AnalyticsController extends Controller
             'total_merchant_volume' => $totalMerchantTransfer,
             'total_users' => User::where('role', 'CUSTOMER')->count(),
             'total_merchants' => User::where('role', 'MERCHANT')->count(),
+            'recent_repayments' => $recentRepayments
         ]);
     }
 
