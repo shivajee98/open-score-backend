@@ -92,4 +92,16 @@ class QrController extends Controller
 
         return response()->json(['message' => 'QR Code linked successfully']);
     }
+
+    public function deleteCode($id)
+    {
+        $qr = DB::table('qr_codes')->where('id', $id)->first();
+        if (!$qr) {
+            return response()->json(['message' => 'QR Code not found'], 404);
+        }
+
+        DB::table('qr_codes')->where('id', $id)->delete();
+
+        return response()->json(['message' => 'QR Code deleted successfully']);
+    }
 }

@@ -102,6 +102,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/qr/generate', [QrController::class, 'generate']);
     Route::get('/admin/qr/batches', [QrController::class, 'getBatches']);
     Route::get('/admin/qr/batches/{id}', [QrController::class, 'getBatchCodes']);
+    Route::delete('/admin/qr/{id}', [QrController::class, 'deleteCode']);
     
     // Merchant Cashback Management
     Route::get('/admin/merchants', [\App\Http\Controllers\MerchantCashbackController::class, 'getMerchants']);
