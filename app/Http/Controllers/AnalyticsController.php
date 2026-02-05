@@ -15,7 +15,10 @@ class AnalyticsController extends Controller
     public function getDashboardStats()
     {
         // Loan Stats
-        $totalDisbursed = Loan::where('status', 'DISBURSED')->sum('amount');
+        // Loan Stats + Sub-User Credits
+        $totalLoanDisbursed = Loan::where('status', 'DISBURSED')->sum('amount');
+        $totalSubUserCredits = \App\Models\SubUser::sum('credit_balance');
+        $totalDisbursed = $totalLoanDisbursed + $totalSubUserCredits;
         
         $totalRepaid = LoanRepayment::where('status', 'PAID')->sum('amount');
         

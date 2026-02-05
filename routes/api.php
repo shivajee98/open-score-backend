@@ -81,6 +81,7 @@ Route::middleware('auth:api')->group(function () {
 
     // Admin User Management
     Route::get('/admin/users', [AdminController::class, 'getUsers']);
+    Route::get('/admin/users/{id}/full-details', [AdminController::class, 'getUserFullDetails']);
     Route::post('/admin/users/{id}/credit', [AdminController::class, 'creditUser']);
     Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser']);
     Route::post('/admin/users/{id}/status', [AdminController::class, 'updateStatus']);

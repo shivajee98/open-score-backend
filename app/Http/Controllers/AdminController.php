@@ -358,4 +358,74 @@ class AdminController extends Controller
         
         return response()->json(['message' => 'Cashback setting updated successfully', 'setting' => $setting]);
     }
+
+    public function getUserFullDetails($id)
+    {
+        $user = \App\Models\User::with(['wallet'])->findOrFail($id);
+        
+        $walletId = $user->wallet ? $user->wallet->id : null;
+        
+        // Loans
+        $loans = \App\Models\Loan::where('user_id', $user->id)
+            ->withCount(['repayments as completed_repayments_count' => function($q) {
+                $q->where('status', 'PAID');
+            }])
+            ->orderBy('created_at', 'desc')
+            ->get();
+            
+        // Ongoing (Active) vs Past (Closed/Defaulted)
+        $ongoingLoans = $loans->whereIn('status', ['APPROVED', 'DISBURSED', 'OVERDUE']);
+        $pastLoans = $loans->whereIn('status', ['CLOSED', 'DEFAULTED', 'CANCELLED', 'REJECTED']);
+        
+        // Transaction History (Paid to whom)
+        $transactions = [];
+        if ($walletId) {
+            $transactions = \App\Models\WalletTransaction::where('wallet_id', $walletId)
+                ->with(['payment.payee_wallet.user']) // To see who they paid to
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function($tx) {
+                    $paidTo = null;
+                    if ($tx->payment && $tx->payment->payee_wallet) {
+                        $paidTo = [
+                            'name' => $tx->payment->payee_wallet->user->name ?? 'Unknown',
+                            'business_name' => $tx->payment->payee_wallet->user->business_name ?? null,
+                            'mobile' => $tx->payment->payee_wallet->user->mobile_number ?? null,
+                        ];
+                    }
+                    return [
+                        'id' => $tx->id,
+                        'amount' => $tx->amount,
+                        'type' => $tx->type,
+                        'source_type' => $tx->source_type,
+                        'description' => $tx->description,
+                        'status' => $tx->status,
+                        'created_at' => $tx->created_at,
+                        'paid_to' => $paidTo
+                    ];
+                });
+        }
+        
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'mobile_number' => $user->mobile_number,
+                'email' => $user->email,
+                'role' => $user->role,
+                'status' => $user->status,
+                'business_name' => $user->business_name,
+                'aadhaar_number' => $user->aadhaar_number,
+                'pan_number' => $user->pan_number,
+                'created_at' => $user->created_at,
+                'wallet_balance' => $walletId ? $this->walletService->getBalance($user->id) : 0
+            ],
+            'loans' => [
+                'ongoing' => $ongoingLoans->values(),
+                'past' => $pastLoans->values(),
+                'total_count' => $loans->count()
+            ],
+            'transactions' => $transactions
+        ]);
+    }
 }
