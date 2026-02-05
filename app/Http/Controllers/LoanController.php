@@ -400,6 +400,8 @@ class LoanController extends Controller
             'postal_code' => 'required|string',
             'employer' => 'required|string',
             'occupation' => 'required|string',
+            'aadhar_number' => 'required|string|size:12', // Added validation
+            'pan_number' => 'required|string|size:10',    // Added validation
             'consent' => 'required|accepted'
         ]);
 
@@ -439,6 +441,10 @@ class LoanController extends Controller
             if (!$user->business_address) {
                 $profileData['business_address'] = $request->street_address;
             }
+
+            // Always update Aadhar and PAN if provided
+            $profileData['aadhar_number'] = $request->aadhar_number;
+            $profileData['pan_number'] = $request->pan_number;
             
             if (!empty($profileData)) {
                 $user->update($profileData);

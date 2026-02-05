@@ -36,7 +36,9 @@ class User extends Authenticatable implements JWTSubject
         'cashback_flat_amount',
         'referral_campaign_id',
         'location_url',
-        'description'
+        'description',
+        'aadhar_number',
+        'pan_number'
     ];
 
     protected $hidden = [
