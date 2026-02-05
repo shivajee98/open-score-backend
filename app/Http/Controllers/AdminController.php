@@ -381,16 +381,16 @@ class AdminController extends Controller
         $transactions = [];
         if ($walletId) {
             $transactions = \App\Models\WalletTransaction::where('wallet_id', $walletId)
-                ->with(['payment.payee_wallet.user']) // To see who they paid to
+                ->with(['sourceWallet.user']) 
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function($tx) {
                     $paidTo = null;
-                    if ($tx->payment && $tx->payment->payee_wallet) {
+                    if ($tx->source_type === 'QR_PAYMENT' && $tx->sourceWallet && $tx->sourceWallet->user) {
                         $paidTo = [
-                            'name' => $tx->payment->payee_wallet->user->name ?? 'Unknown',
-                            'business_name' => $tx->payment->payee_wallet->user->business_name ?? null,
-                            'mobile' => $tx->payment->payee_wallet->user->mobile_number ?? null,
+                            'name' => $tx->sourceWallet->user->name ?? 'Unknown',
+                            'business_name' => $tx->sourceWallet->user->business_name ?? null,
+                            'mobile' => $tx->sourceWallet->user->mobile_number ?? null,
                         ];
                     }
                     return [
