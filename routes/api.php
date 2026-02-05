@@ -45,6 +45,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/loans/{id}/repay', [LoanController::class, 'repay']);
     Route::get('/loans/{id}/repayments', [LoanController::class, 'repayments']);
     Route::post('/loans/{id}/submit-form', [LoanController::class, 'submitForm']);
+    Route::post('/loans/{id}/kyc-data', [LoanController::class, 'saveKycData']);
     
     
     // Admin

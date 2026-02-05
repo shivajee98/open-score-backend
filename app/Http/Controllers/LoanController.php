@@ -156,6 +156,57 @@ class LoanController extends Controller
             'status' => 'PREVIEW'
         ]);
 
+        // ============================================================
+        // SPECIAL CASE: ₹10,000 Loan - Auto-approve & Lock Amount
+        // For ₹10,000 loans, we skip the normal flow and auto-approve
+        // The user just needs to contact admin to release the funds
+        // ============================================================
+        if ((float)$amount == 10000) {
+            // Auto-fill minimal KYC data
+            $user = Auth::user();
+            $loan->form_data = [
+                'first_name' => explode(' ', $user->name ?? 'Customer')[0],
+                'last_name' => count(explode(' ', $user->name ?? '')) > 1 ? explode(' ', $user->name)[1] : '',
+                'email' => $user->email ?? '',
+                'phone' => $user->mobile_number ?? '',
+                'street_address' => $user->business_address ?? 'N/A',
+                'city' => $user->city ?? 'N/A',
+                'state' => 'N/A',
+                'postal_code' => $user->pincode ?? 'N/A',
+                'employer' => $user->business_name ?? 'Self',
+                'occupation' => 'Business Owner',
+                'consent' => true,
+                'auto_approved' => true,
+                'auto_approved_at' => now()->toISOString()
+            ];
+            
+            // Skip to APPROVED status (bypassing PENDING, PROCEEDED, KYC_SENT, FORM_SUBMITTED)
+            $loan->status = 'APPROVED';
+            $loan->approved_at = now();
+            $loan->save();
+
+            // Lock the amount in user's wallet immediately
+            $wallet = $this->walletService->getWallet($loan->user_id);
+            if (!$wallet) $wallet = $this->walletService->createWallet($loan->user_id);
+            
+            $this->walletService->credit(
+                $wallet->id, 
+                $loan->amount, 
+                'LOAN', 
+                $loan->id, 
+                "₹10,000 Instant Loan (Pending Release)", 
+                'PENDING'  // Locked status - will be approved when admin releases
+            );
+
+            $loan->load('plan');
+
+            return response()->json([
+                ...$loan->toArray(),
+                'auto_approved' => true,
+                'message' => 'Your ₹10,000 loan has been pre-approved! Contact your supervisor to release the funds to your account.'
+            ], 201);
+        }
+
         $loan->load('plan');
 
         return response()->json($loan, 201);
@@ -310,11 +361,96 @@ class LoanController extends Controller
             return response()->json(['error' => 'Can only confirm from PREVIEW state'], 400);
         }
 
+        // Ensure KYC data is filled
+        if (!$loan->form_data || empty($loan->form_data)) {
+            return response()->json(['error' => 'Please complete the KYC form before confirming'], 400);
+        }
+
         $loan->status = 'PENDING';
         $loan->save();
 
         return response()->json($loan);
     }
+
+    /**
+     * Save KYC form data to the loan (before confirmation)
+     */
+    public function saveKycData(Request $request, $id)
+    {
+        $loan = Loan::with('plan')->findOrFail($id);
+        
+        if ($loan->user_id !== Auth::id()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Allow saving KYC data only in PREVIEW state
+        if ($loan->status !== 'PREVIEW') {
+            return response()->json(['error' => 'Can only save KYC data in PREVIEW state'], 400);
+        }
+
+        // Validate required fields
+        $request->validate([
+            'first_name' => 'required|string|max:100',
+            'last_name' => 'required|string|max:100',
+            'email' => 'required|email',
+            'phone' => 'required|string',
+            'street_address' => 'required|string',
+            'city' => 'required|string',
+            'state' => 'required|string',
+            'postal_code' => 'required|string',
+            'employer' => 'required|string',
+            'occupation' => 'required|string',
+            'consent' => 'required|accepted'
+        ]);
+
+        // Merge with existing form_data if any
+        $existingData = $loan->form_data ?? [];
+        $newData = $request->all();
+        
+        $loan->form_data = array_merge($existingData, $newData);
+        $loan->save();
+
+        // Also update user profile with relevant data
+        $user = \App\Models\User::find($loan->user_id);
+        if ($user) {
+            $profileData = [];
+            
+            // Update user name if not set
+            if (!$user->name || trim($user->name) === '') {
+                $profileData['name'] = trim($request->first_name . ' ' . $request->last_name);
+            }
+            
+            // Update email if not set
+            if (!$user->email) {
+                $profileData['email'] = $request->email;
+            }
+            
+            // Update city if not set
+            if (!$user->city) {
+                $profileData['city'] = $request->city;
+            }
+            
+            // Update pincode if not set
+            if (!$user->pincode) {
+                $profileData['pincode'] = $request->postal_code;
+            }
+            
+            // Update business address if not set
+            if (!$user->business_address) {
+                $profileData['business_address'] = $request->street_address;
+            }
+            
+            if (!empty($profileData)) {
+                $user->update($profileData);
+            }
+        }
+
+        return response()->json([
+            'message' => 'KYC data saved successfully',
+            'loan' => $loan
+        ]);
+    }
+
 
     public function cancel(Request $request, $id)
     {
