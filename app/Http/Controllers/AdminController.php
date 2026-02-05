@@ -361,7 +361,11 @@ class AdminController extends Controller
 
     public function getUserFullDetails($id)
     {
-        $user = \App\Models\User::with(['wallet'])->findOrFail($id);
+        $user = \App\Models\User::with(['wallet'])->find($id);
+        
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
         
         $walletId = $user->wallet ? $user->wallet->id : null;
         
