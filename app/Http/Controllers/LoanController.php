@@ -658,6 +658,33 @@ class LoanController extends Controller
             // Generate Repayment Schedule
             $this->generateRepaymentSchedule($loan);
 
+            // Check for referral bonus - loan disbursement
+            $referralRecord = \App\Models\UserReferral::where('referred_id', $loan->user_id)->first();
+            if ($referralRecord && !$referralRecord->loan_bonus_paid) {
+                $referralSettings = \App\Models\ReferralSetting::first();
+                if ($referralSettings && $referralSettings->is_enabled) {
+                    $loanBonus = $referralSettings->loan_disbursement_bonus;
+                    
+                    // Credit loan disbursement bonus to referrer
+                    $referrerWallet = \App\Models\Wallet::where('user_id', $referralRecord->referrer_id)->first();
+                    if ($referrerWallet && $loanBonus > 0) {
+                        $this->walletService->credit(
+                            $referrerWallet->id,
+                            $loanBonus,
+                            'REFERRAL_LOAN_BONUS',
+                            $loan->user_id,
+                            "Loan disbursement bonus for referred user loan #" . $loan->id
+                        );
+                        
+                        // Update referral record
+                        $referralRecord->loan_bonus_earned = $loanBonus;
+                        $referralRecord->loan_bonus_paid = true;
+                        $referralRecord->loan_bonus_paid_at = now();
+                        $referralRecord->save();
+                    }
+                }
+            }
+
             DB::table('admin_logs')->insert([
                 'admin_id' => Auth::id(),
                 'action' => 'loan_disbursed',

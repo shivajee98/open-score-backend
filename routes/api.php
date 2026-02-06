@@ -143,10 +143,19 @@ Route::middleware('auth:api')->group(function () {
     // Admin User Details
     Route::get('/admin/users/{id}/transactions', [AdminController::class, 'getUserTransactions']);
     Route::post('/admin/users/bulk-cashback', [AdminController::class, 'bulkUpdateCashback']);
-    // Referral System
+    
+    // Referral System - Admin
     Route::get('/admin/referrals', [\App\Http\Controllers\ReferralController::class, 'index']);
     Route::post('/admin/referrals', [\App\Http\Controllers\ReferralController::class, 'store']);
     Route::get('/admin/referrals/{id}', [\App\Http\Controllers\ReferralController::class, 'show']);
+    Route::get('/admin/referral-settings', [\App\Http\Controllers\ReferralController::class, 'getSettings']);
+    Route::put('/admin/referral-settings', [\App\Http\Controllers\ReferralController::class, 'updateSettings']);
+    Route::get('/admin/all-referrals', [\App\Http\Controllers\ReferralController::class, 'getAllReferrals']);
+    
+    // Referral System - User
+    Route::get('/referral/my-code', [\App\Http\Controllers\ReferralController::class, 'getMyReferralCode']);
+    Route::get('/referral/my-stats', [\App\Http\Controllers\ReferralController::class, 'getMyReferralStats']);
+    Route::post('/referral/verify-code', [\App\Http\Controllers\ReferralController::class, 'verifyCode']);
     
     // Sub-User Management
     Route::get('/admin/sub-users', [\App\Http\Controllers\SubUserController::class, 'index']);

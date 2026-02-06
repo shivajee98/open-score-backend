@@ -16,6 +16,7 @@ class User extends Authenticatable implements JWTSubject
         'email',
         'mobile_number',
         'role',
+        'my_referral_code',
         'business_name',
         'profile_image',
         'is_onboarded',
@@ -94,5 +95,17 @@ class User extends Authenticatable implements JWTSubject
     public function referralCampaign()
     {
         return $this->belongsTo(ReferralCampaign::class);
+    }
+
+    // Users I have referred
+    public function referredUsers()
+    {
+        return $this->hasMany(UserReferral::class, 'referrer_id');
+    }
+
+    // My referral record (who referred me)
+    public function referredBy()
+    {
+        return $this->hasOne(UserReferral::class, 'referred_id');
     }
 }

@@ -55,84 +55,132 @@ class AuthController extends Controller
                  if (!$role) {
                      return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
                  }
-                 
-                 // Handle Referral Logic for New User
-                 $referralCampaignId = null;
-                 $subUserId = null;
-                 $cashbackAmount = 0;
-                 
-                 if ($referralCode) {
-                    // Check if it's a sub-user referral code
-                    $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
-                        ->where('is_active', true)
-                        ->first();
-                    
-                    if ($subUser) {
-                        $subUserId = $subUser->id;
-                        $cashbackAmount = $subUser->default_signup_amount;
-                    } else {
-                        // Check regular referral campaign
-                        $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
-                            ->where('is_active', true)
-                            ->first();
-                        if ($campaign) {
-                            $referralCampaignId = $campaign->id;
-                            $cashbackAmount = $campaign->cashback_amount;
-                        }
-                    }
-                 } else {
-                     // Get default signup cashback from settings
-                     $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $role)
-                         ->where('is_active', true)
-                         ->first();
-                     if ($cashbackSetting) {
-                         $cashbackAmount = $cashbackSetting->cashback_amount;
-                     }
-                 }
-
-                 // Create new user (Customer/Merchant)
-                 $user = \App\Models\User::create([
-                     'mobile_number' => $mobile,
-                     'role' => $role,
-                     'status' => 'ACTIVE',
-                     'is_onboarded' => false,
-                     'password' => bcrypt('password'),
-                     'referral_campaign_id' => $referralCampaignId,
-                     'sub_user_id' => $subUserId
-                 ]);
-
-                 // Create Wallet for new user
-                 $walletService = app(\App\Services\WalletService::class);
-                 $walletService->createWallet($user->id);
-
-                 // Credit Referral/Signup Bonus
-                 if ($cashbackAmount > 0) {
-                     $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
+                                  
+                  // Handle Referral Logic for New User
+                  $referralCampaignId = null;
+                  $subUserId = null;
+                  $cashbackAmount = 0;
+                  $referrerId = null; // Track who referred this user
+                  
+                  if ($referralCode) {
+                     // First priority: Check if it's a user's personal referral code
+                     $referrer = \App\Models\User::where('my_referral_code', strtoupper($referralCode))->first();
                      
-                     // If sub-user referral, deduct from sub-user credit
-                     if ($subUserId && $subUser) {
-                         if ($subUser->credit_balance >= $cashbackAmount) {
-                             $subUser->credit_balance -= $cashbackAmount;
-                             $subUser->save();
-                             
-                             $walletService->credit(
-                                 $wallet->id,
-                                 $cashbackAmount,
-                                 'SUB_USER_REFERRAL_BONUS',
-                                 $user->id,
-                                 "Welcome Bonus from sub-user: {$subUser->name}"
-                             );
+                     if ($referrer) {
+                         // This is a personal referral - will create UserReferral record after user creation
+                         $referrerId = $referrer->id;
+                         
+                         // Get signup bonus from referral settings
+                         $referralSettings = \App\Models\ReferralSetting::first();
+                         if ($referralSettings && $referralSettings->is_enabled) {
+                             $cashbackAmount = $referralSettings->signup_bonus;
                          }
                      } else {
-                         $walletService->credit(
-                             $wallet->id,
-                             $cashbackAmount,
-                             $referralCampaignId ? 'REFERRAL_BONUS' : 'SIGNUP_BONUS',
-                             $user->id,
-                             $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : 'Signup Welcome Bonus'
-                         );
+                         // Check if it's a sub-user referral code
+                         $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
+                             ->where('is_active', true)
+                             ->first();
+                         
+                         if ($subUser) {
+                             $subUserId = $subUser->id;
+                             $cashbackAmount = $subUser->default_signup_amount;
+                         } else {
+                             // Check regular referral campaign
+                             $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
+                                 ->where('is_active', true)
+                                 ->first();
+                             if ($campaign) {
+                                 $referralCampaignId = $campaign->id;
+                                 $cashbackAmount = $campaign->cashback_amount;
+                             }
+                         }
                      }
-                 }
+                  } else {
+                      // Get default signup cashback from settings
+                      $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $role)
+                          ->where('is_active', true)
+                          ->first();
+                      if ($cashbackSetting) {
+                          $cashbackAmount = $cashbackSetting->cashback_amount;
+                      }
+                  }
+
+                  // Create new user (Customer/Merchant)
+                  $user = \App\Models\User::create([
+                      'mobile_number' => $mobile,
+                      'role' => $role,
+                      'status' => 'ACTIVE',
+                      'is_onboarded' => false,
+                      'password' => bcrypt('password'),
+                      'referral_campaign_id' => $referralCampaignId,
+                      'sub_user_id' => $subUserId
+                  ]);
+
+                  // Create Wallet for new user
+                  $walletService = app(\App\Services\WalletService::class);
+                  $walletService->createWallet($user->id);
+
+                  // Handle personal referral - Create UserReferral record
+                  if ($referrerId) {
+                      $referralSettings = \App\Models\ReferralSetting::first();
+                      $signupBonus = $referralSettings ? $referralSettings->signup_bonus : 100;
+                      
+                      \App\Models\UserReferral::create([
+                          'referrer_id' => $referrerId,
+                          'referred_id' => $user->id,
+                          'referral_code' => strtoupper($referralCode),
+                          'signup_bonus_earned' => $signupBonus,
+                          'signup_bonus_paid' => false
+                      ]);
+                      
+                      // Credit signup bonus to referrer immediately
+                      $referrerWallet = \App\Models\Wallet::where('user_id', $referrerId)->first();
+                      if ($referrerWallet) {
+                          $walletService->credit(
+                              $referrerWallet->id,
+                              $signupBonus,
+                              'REFERRAL_SIGNUP_BONUS',
+                              $user->id,
+                              "Referral bonus for {$user->mobile_number} signup"
+                          );
+                          
+                          // Mark as paid
+                          \App\Models\UserReferral::where('referred_id', $user->id)->update([
+                              'signup_bonus_paid' => true,
+                              'signup_bonus_paid_at' => now()
+                          ]);
+                      }
+                  }
+
+                  // Credit Referral/Signup Bonus to new user
+                  if ($cashbackAmount > 0) {
+                      $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
+                      
+                      // If sub-user referral, deduct from sub-user credit
+                      if ($subUserId && isset($subUser)) {
+                          if ($subUser->credit_balance >= $cashbackAmount) {
+                              $subUser->credit_balance -= $cashbackAmount;
+                              $subUser->save();
+                              
+                              $walletService->credit(
+                                  $wallet->id,
+                                  $cashbackAmount,
+                                  'SUB_USER_REFERRAL_BONUS',
+                                  $user->id,
+                                  "Welcome Bonus from sub-user: {$subUser->name}"
+                              );
+                          }
+                      } else {
+                          $walletService->credit(
+                              $wallet->id,
+                              $cashbackAmount,
+                              $referralCampaignId ? 'REFERRAL_BONUS' : ($referrerId ? 'REFERRAL_WELCOME_BONUS' : 'SIGNUP_BONUS'),
+                              $user->id,
+                              $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus')
+                          );
+                      }
+                  }
+
 
              } else {
                  // If user exists but is not onboarded, update the role if provided
