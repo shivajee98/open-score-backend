@@ -225,6 +225,7 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
+            'profile_image' => 'nullable|string',
             'shop_image' => 'nullable|image|max:10240', // 10MB
         ]);
 
@@ -235,7 +236,12 @@ class AuthController extends Controller
             $user->business_name = $request->business_name;
         }
 
-        if ($request->hasFile('shop_image')) {
+        // Support direct Cloudinary URL from frontend
+        if ($request->filled('profile_image')) {
+            $user->profile_image = $request->profile_image;
+        } 
+        // Fallback to direct file upload handling
+        elseif ($request->hasFile('shop_image')) {
             $path = $request->file('shop_image')->store('merchants', 'public');
             $user->profile_image = asset('storage/' . $path);
         }
