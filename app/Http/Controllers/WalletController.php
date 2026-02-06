@@ -76,7 +76,7 @@ class WalletController extends Controller
         $transactions->getCollection()->transform(function ($tx) use ($wallets, $users) {
             // Default values
             $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Cashback' : 'OpenScore';
-            $tx->counterparty_vpa = 'System';
+            $tx->counterparty_vpa = 'Open Score';
 
             if ($tx->source_type === 'QR_PAYMENT' && $tx->source_id) {
                 // source_id is now the Counterparty Wallet ID
