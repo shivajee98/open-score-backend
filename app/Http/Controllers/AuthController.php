@@ -373,7 +373,11 @@ class AuthController extends Controller
             'bank_name' => 'nullable|string|max:255',
             'account_number' => 'nullable|string|max:50',
             'ifsc_code' => 'nullable|string|max:20',
-            'account_holder_name' => 'nullable|string|max:255'
+            'account_holder_name' => 'nullable|string|max:255',
+            'business_segment' => 'nullable|string|max:255',
+            'business_type' => 'nullable|string|max:255',
+            'map_location_url' => 'nullable|string|max:500',
+            'shop_images' => 'nullable|string', // JSON string from frontend
         ]);
 
         $user = \App\Models\User::find(Auth::id());
@@ -383,6 +387,12 @@ class AuthController extends Controller
         if ($request->city) $user->city = $request->city;
         if ($request->business_address) $user->business_address = $request->business_address;
         
+        // Merchant Specific Fields
+        if ($request->has('business_segment')) $user->business_segment = $request->business_segment;
+        if ($request->has('business_type')) $user->business_type = $request->business_type;
+        if ($request->has('map_location_url')) $user->map_location_url = $request->map_location_url;
+        if ($request->has('shop_images')) $user->shop_images = $request->shop_images;
+
         // Only allow bank details update if not already set
         if (!$user->account_number) {
             if ($request->bank_name) $user->bank_name = $request->bank_name;
