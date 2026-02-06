@@ -36,7 +36,31 @@ class MerchantController extends Controller
             }
         }
 
-        $merchants = $query->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'business_nature', 'description', 'location_url', 'profile_image')
+        // Apply filters
+        if ($request->business_segment) {
+            $query->where('business_segment', $request->business_segment);
+        }
+
+        if ($request->business_type) {
+            $query->where('business_type', 'like', '%' . $request->business_type . '%');
+        }
+
+        // Apply Sorting
+        if ($request->sort) {
+            switch ($request->sort) {
+                case 'name_asc':
+                    $query->orderBy('business_name', 'asc');
+                    break;
+                case 'name_desc':
+                    $query->orderBy('business_name', 'desc');
+                    break;
+                case 'newest':
+                    $query->orderBy('created_at', 'desc');
+                    break;
+            }
+        }
+
+        $merchants = $query->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'business_nature', 'description', 'location_url', 'profile_image', 'business_segment', 'business_type', 'shop_images', 'map_location_url')
                            ->get();
 
         return response()->json($merchants);
@@ -46,7 +70,7 @@ class MerchantController extends Controller
     {
         $merchant = User::where('role', 'MERCHANT')
                         ->where('id', $id)
-                        ->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'email', 'business_nature', 'description', 'location_url', 'profile_image')
+                        ->select('id', 'name', 'business_name', 'business_address', 'pincode', 'city', 'mobile_number', 'email', 'business_nature', 'description', 'location_url', 'profile_image', 'business_segment', 'business_type', 'shop_images', 'map_location_url')
                         ->firstOrFail();
 
         return response()->json($merchant);
