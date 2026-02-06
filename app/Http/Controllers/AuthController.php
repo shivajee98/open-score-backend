@@ -224,10 +224,22 @@ class AuthController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
+            'business_name' => 'nullable|string|max:255',
+            'shop_image' => 'nullable|image|max:10240', // 10MB
         ]);
 
         $user->name = $request->name;
         $user->email = $request->email;
+        
+        if ($request->has('business_name')) {
+            $user->business_name = $request->business_name;
+        }
+
+        if ($request->hasFile('shop_image')) {
+            $path = $request->file('shop_image')->store('merchants', 'public');
+            $user->profile_image = asset('storage/' . $path);
+        }
+
         $user->is_onboarded = true;
         $user->save();
 
