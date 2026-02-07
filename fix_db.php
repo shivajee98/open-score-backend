@@ -4,17 +4,28 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 
-require __DIR__ . '/vendor/autoload.php';
-$app = require_once __DIR__ . '/bootstrap/app.php';
-$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
-$kernel->bootstrap();
+// Bootstrap only if run directly
+if (!defined('LARAVEL_START')) {
+    require __DIR__ . '/vendor/autoload.php';
+    $app = require_once __DIR__ . '/bootstrap/app.php';
+    $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+    $kernel->bootstrap();
+}
+
+if (php_sapi_name() !== 'cli' && !defined('LARAVEL_START')) {
+    header('Content-Type: text/plain');
+}
 
 echo "Checking Database Schema...\n";
 
 // 1. Reset QR System (User wants all batches deleted and schema fixed)
 echo "Resetting QR System tables...\n";
-Schema::dropIfExists('qr_codes');
-Schema::dropIfExists('qr_batches');
+if (Schema::hasTable('qr_codes')) {
+    Schema::drop('qr_codes');
+}
+if (Schema::hasTable('qr_batches')) {
+    Schema::drop('qr_batches');
+}
 
 echo "Creating qr_batches table...\n";
 Schema::create('qr_batches', function (Blueprint $table) {
@@ -36,7 +47,7 @@ Schema::create('qr_codes', function (Blueprint $table) {
 });
 echo "QR System Reset Complete.\n";
 
-// 3. Fix Loans Table Defaults (the other error in logs)
+// 3. Fix Loans Table Defaults
 if (Schema::hasTable('loans')) {
     echo "Fixing loans table defaults...\n";
     Schema::table('loans', function (Blueprint $table) {

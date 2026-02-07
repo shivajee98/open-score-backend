@@ -4,11 +4,21 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 
-require __DIR__ . '/vendor/autoload.php';
-$app = require_once __DIR__ . '/bootstrap/app.php';
+// Safety check for remote execution
+if (php_sapi_name() !== 'cli') {
+    $secret = $_GET['secret'] ?? '';
+    if ($secret !== 'open_fix_2026') {
+        die('Unauthorized access.');
+    }
+}
+
+// Laravel Bootstrap
+require __DIR__ . '/../vendor/autoload.php';
+$app = require_once __DIR__ . '/../bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
+header('Content-Type: text/plain');
 echo "Checking Database Schema...\n";
 
 // 1. Reset QR System (User wants all batches deleted and schema fixed)
