@@ -15,12 +15,18 @@ class AnalyticsController extends Controller
     public function getDashboardStats()
     {
         // Loan Stats
-        // Loan Stats + Sub-User Credits
-        $totalLoanDisbursed = Loan::where('status', 'DISBURSED')->sum('amount');
+        // REFACTORED: Use LoanAllocation as source of truth for Disbursed amount
+        $totalLoanDisbursed = \App\Models\LoanAllocation::where('status', 'DISBURSED')->sum('actual_disbursed');
         $totalSubUserCredits = \App\Models\SubUser::sum('credit_balance');
         $totalDisbursed = $totalLoanDisbursed + $totalSubUserCredits;
         
-        $totalRepaid = LoanRepayment::where('status', 'PAID')->sum('amount');
+        
+        $totalRepaid = LoanRepayment::where('status', 'PAID')
+            ->whereHas('loan', function($q) {
+                $q->whereHas('allocation', function($qa) {
+                    $qa->where('status', 'DISBURSED');
+                });
+            })->sum('amount');
         
         $activeLoansCount = Loan::whereIn('status', ['DISBURSED', 'APPROVED'])->count();
         $completedLoansCount = Loan::where('status', 'CLOSED')->count(); 
@@ -31,12 +37,11 @@ class AnalyticsController extends Controller
         $totalMerchantTransfer = WalletTransaction::where('source_type', 'QR_PAYMENT')->sum('amount');
         
         // New Metric: Amount to be recovered (Outstanding Principal + Interest - Paid)
-        // Simplest: Sum of (Net Payable - Paid Amount) for all DISBURSED loans
-        // Net Payable is calculated on the fly in Model accessor. We can't sum it easily in SQL.
-        // Approx: Sum(amount) - Sum(paid_amount) of active loans. 
-        // More Accurate: Sum of PENDING repayments for DISBURSED loans.
+        // REFACTORED: Based on loans that have a corresponding DISBURSED allocation.
         $totalOutstanding = LoanRepayment::whereHas('loan', function($q) {
-            $q->where('status', 'DISBURSED');
+            $q->whereHas('allocation', function($qa) {
+                $qa->where('status', 'DISBURSED');
+            });
         })->where('status', 'PENDING')->sum('amount');
 
         // New Metric: Overdue Amount

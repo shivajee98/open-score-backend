@@ -166,6 +166,11 @@ class Loan extends Model
         return $this->belongsTo(User::class, 'disbursed_by');
     }
 
+    public function allocation()
+    {
+        return $this->hasOne(LoanAllocation::class);
+    }
+
     public function repayments()
     {
         return $this->hasMany(LoanRepayment::class);

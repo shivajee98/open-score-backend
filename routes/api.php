@@ -95,6 +95,11 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/funds/pending', [AdminController::class, 'getPendingTransactions']);
     Route::post('/admin/funds/{id}/approve', [AdminController::class, 'approveFund']);
     Route::post('/admin/funds/{id}/reject', [AdminController::class, 'rejectFund']);
+    
+    // Admin Fund Management (New)
+    Route::get('/admin/funds/stats', [AdminController::class, 'getFundStats']);
+    Route::post('/admin/funds/add', [AdminController::class, 'addFunds']);
+    Route::post('/admin/funds/update', [AdminController::class, 'updateFunds']);
 
     // Admin Payouts
     Route::post('/admin/payouts/{id}/reject', [PaymentController::class, 'rejectWithdrawal']);
