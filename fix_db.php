@@ -11,75 +11,30 @@ $kernel->bootstrap();
 
 echo "Checking Database Schema...\n";
 
-// 1. Check qr_batches table
-if (!Schema::hasTable('qr_batches')) {
-    echo "Creating qr_batches table...\n";
-    Schema::create('qr_batches', function (Blueprint $table) {
-        $table->id();
-        $table->string('name')->nullable();
-        $table->integer('count');
-        $table->timestamps();
-    });
-    echo "qr_batches created.\n";
-} else {
-    echo "qr_batches exists.\n";
-}
+// 1. Reset QR System (User wants all batches deleted and schema fixed)
+echo "Resetting QR System tables...\n";
+Schema::dropIfExists('qr_codes');
+Schema::dropIfExists('qr_batches');
 
-// 2. Check qr_codes table
-if (!Schema::hasTable('qr_codes')) {
-    echo "Creating qr_codes table...\n";
-    Schema::create('qr_codes', function (Blueprint $table) {
-        $table->id();
-        $table->uuid('code')->unique();
-        $table->unsignedBigInteger('batch_id');
-        $table->unsignedBigInteger('user_id')->nullable();
-        $table->string('status')->default('active');
-        $table->timestamps();
-    });
-    echo "qr_codes created.\n";
-} else {
-    echo "qr_codes exists. Harmonizing columns...\n";
-    
-    Schema::table('qr_codes', function (Blueprint $table) {
-        // Drop legacy columns if they exist
-        if (Schema::hasColumn('qr_codes', 'wallet_id')) {
-            echo "Dropping legacy column: wallet_id\n";
-            try { $table->dropForeign(['wallet_id']); } catch (\Exception $e) {}
-            $table->dropColumn('wallet_id');
-        }
-        if (Schema::hasColumn('qr_codes', 'code_data')) {
-            echo "Dropping legacy column: code_data\n";
-            $table->dropColumn('code_data');
-        }
+echo "Creating qr_batches table...\n";
+Schema::create('qr_batches', function (Blueprint $table) {
+    $table->id();
+    $table->string('name')->nullable();
+    $table->integer('count');
+    $table->timestamps();
+});
 
-        // Add missing columns
-        if (!Schema::hasColumn('qr_codes', 'code')) {
-            echo "Adding missing column: code\n";
-            $table->uuid('code')->unique()->after('id');
-        }
-        if (!Schema::hasColumn('qr_codes', 'batch_id')) {
-            echo "Adding missing column: batch_id\n";
-            $table->unsignedBigInteger('batch_id')->after('code');
-        }
-        
-        // Fix nullability
-        if (Schema::hasColumn('qr_codes', 'user_id')) {
-            echo "Making user_id nullable\n";
-            $table->unsignedBigInteger('user_id')->nullable()->change();
-        }
-    });
-
-    // Ensure foreign key
-    Schema::table('qr_codes', function (Blueprint $table) {
-        try {
-            $table->foreign('batch_id')->references('id')->on('qr_batches')->onDelete('cascade');
-            echo "Foreign key added.\n";
-        } catch (\Exception $e) {
-            echo "Foreign key check: already exists or failed.\n";
-        }
-    });
-
-}
+echo "Creating qr_codes table...\n";
+Schema::create('qr_codes', function (Blueprint $table) {
+    $table->id();
+    $table->uuid('code')->unique();
+    $table->foreignId('batch_id')->constrained('qr_batches')->onDelete('cascade');
+    $table->unsignedBigInteger('user_id')->nullable();
+    $table->foreign('user_id')->references('id')->on('users')->nullOnDelete();
+    $table->string('status')->default('active');
+    $table->timestamps();
+});
+echo "QR System Reset Complete.\n";
 
 // 3. Fix Loans Table Defaults (the other error in logs)
 if (Schema::hasTable('loans')) {

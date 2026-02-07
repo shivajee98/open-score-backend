@@ -126,4 +126,19 @@ class QrController extends Controller
 
         return response()->json(['message' => 'QR Code deleted successfully']);
     }
+
+    public function deleteAllBatches()
+    {
+        // Ensure only ADMIN can do this
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        DB::transaction(function () {
+            DB::table('qr_codes')->delete();
+            DB::table('qr_batches')->delete();
+        });
+
+        return response()->json(['message' => 'All batches and codes deleted successfully']);
+    }
 }
