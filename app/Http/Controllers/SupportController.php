@@ -99,7 +99,12 @@ class SupportController extends Controller
         ]);
         
         // Broadcast event
-        event(new \App\Events\MessageSent($msg));
+        try {
+            event(new \App\Events\MessageSent($msg));
+        } catch (\Exception $e) {
+            // Log the error but don't fail the request
+            \Illuminate\Support\Facades\Log::error('Support ticket broadcast failed: ' . $e->getMessage());
+        }
 
         return response()->json($ticket->load('messages'), 201);
     }
@@ -116,6 +121,27 @@ class SupportController extends Controller
         }
 
         return response()->json($ticket);
+    }
+
+    // Get messages for polling (Fetch new messages only)
+    public function getMessages(Request $request, $id)
+    {
+        $user = Auth::user();
+        $ticket = SupportTicket::findOrFail($id);
+
+        if ($user->role !== 'ADMIN' && $ticket->user_id !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $query = TicketMessage::where('support_ticket_id', $id)->with('user');
+
+        if ($request->has('after_id')) {
+            $query->where('id', '>', $request->after_id);
+        }
+
+        $messages = $query->get();
+
+        return response()->json($messages);
     }
 
     // Send a message in a ticket
@@ -146,7 +172,11 @@ class SupportController extends Controller
         ]);
         
         // Broadcast event
-        event(new \App\Events\MessageSent($message));
+        try {
+            event(new \App\Events\MessageSent($message));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Support message broadcast failed: ' . $e->getMessage());
+        }
 
         // If user replies, status maybe open/in_progress? 
         // If admin replies, we assume in_progress or resolved if they updated status separately.

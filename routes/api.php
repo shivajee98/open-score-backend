@@ -141,6 +141,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/support/tickets', [SupportController::class, 'index']);
     Route::post('/support/tickets', [SupportController::class, 'store']);
     Route::get('/support/tickets/{id}', [SupportController::class, 'show']);
+    Route::get('/support/tickets/{id}/messages', [SupportController::class, 'getMessages']); // Polling Route
     Route::post('/support/tickets/{id}/message', [SupportController::class, 'sendMessage']);
     Route::put('/support/tickets/{id}/status', [SupportController::class, 'updateStatus']);
     
