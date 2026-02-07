@@ -621,18 +621,51 @@ class LoanController extends Controller
             return response()->json(['error' => 'Loan must have submitted form before approval'], 400);
         }
 
-        $loan->status = 'APPROVED';
-        $loan->approved_at = now();
-        $loan->approved_by = Auth::id();
-        $loan->save();
+        // FINANCIAL CONTROL: Check Admin Funds
+        $adminFund = \App\Models\AdminFund::first();
+        if (!$adminFund) {
+             return response()->json(['error' => 'Admin fund pool not initialized'], 500);
+        }
 
-        DB::table('admin_logs')->insert([
-            'admin_id' => Auth::id(),
-            'action' => 'loan_approved',
-            'description' => "Approved loan stage (pre-disbursal) for ₹{$loan->amount}, User ID: {$loan->user_id}",
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // Calculate current available
+        $reserved = \App\Models\LoanAllocation::where('status', 'RESERVED')->sum('allocated_amount');
+        $disbursed = \App\Models\LoanAllocation::where('status', 'DISBURSED')->sum('actual_disbursed');
+        $available = $adminFund->total_funds - $reserved - $disbursed;
+
+        if ($available < $loan->amount) {
+            return response()->json([
+                'error' => 'Insufficient Funds', 
+                'message' => "Cannot approve loan. Available admin funds (₹{$available}) are less than loan amount (₹{$loan->amount}). Please add funds to the pool."
+            ], 400);
+        }
+
+        DB::transaction(function() use ($loan, $adminFund) {
+            $loan->status = 'APPROVED';
+            $loan->approved_at = now();
+            $loan->approved_by = Auth::id();
+            $loan->save();
+
+            // RESERVE FUNDS
+            \App\Models\LoanAllocation::create([
+                'loan_id' => $loan->id,
+                'user_id' => $loan->user_id,
+                'allocated_amount' => $loan->amount,
+                'status' => 'RESERVED'
+            ]);
+            
+            // Update cached available funds
+            // We don't strictly need to do this here if getStats validates it, but good for consistency
+            $adminFund->available_funds -= $loan->amount;
+            $adminFund->save();
+
+            DB::table('admin_logs')->insert([
+                'admin_id' => Auth::id(),
+                'action' => 'loan_approved',
+                'description' => "Approved loan for ₹{$loan->amount}. Funds reserved.",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
 
         return response()->json($loan);
     }
@@ -653,6 +686,48 @@ class LoanController extends Controller
             $loan->disbursed_at = now();
             $loan->disbursed_by = Auth::id();
             $loan->save();
+
+            // FINANCIAL CONTROL: Update Allocation to DISBURSED
+            // We find the reserved allocation and mark it as disbursed.
+            $allocation = \App\Models\LoanAllocation::where('loan_id', $loan->id)
+                ->whereIn('status', ['RESERVED', 'ADJUSTED']) // Include ADJUSTED
+                ->first();
+                
+            if ($allocation) {
+                $allocation->status = 'DISBURSED';
+                $allocation->actual_disbursed = $loan->amount;
+                 // If the reserved amount was different (due to admin reduction), we might need logic here.
+                 // But typically, we disburse the full loan amount. 
+                 // If reserved was 9700 (due to 3000 reduction), and we disburse 10000...
+                 // Then we are overspending the pool? 
+                 // The requirement says: "if admin enter 103000 ... edited to 100000 ... decreased amount has to be deducted".
+                 // This implies the USER gets less money? 
+                 // "amount has to be deducted in the proportion"
+                 
+                 // If allocation was adjusted, the user should receive the ADJUSTED amount.
+                 if ($allocation->allocated_amount < $loan->amount) {
+                      // Disburse only the allocated amount?
+                      // Or do we disburse the full amount and create a deficit?
+                      // "decreased amount has to be deducted" implies user gets less.
+                      // So we should update the LOAN amount to match the allocation!
+                      
+                      $loan->amount = $allocation->allocated_amount;
+                      $loan->save(); // Update loan principal
+                 }
+                 
+                 $allocation->actual_disbursed = $loan->amount;
+                 $allocation->save();
+            } else {
+                 // Fallback if no allocation exists (legacy loans?)
+                 // Create one now for record keeping
+                 \App\Models\LoanAllocation::create([
+                    'loan_id' => $loan->id,
+                    'user_id' => $loan->user_id,
+                    'allocated_amount' => $loan->amount,
+                    'actual_disbursed' => $loan->amount,
+                    'status' => 'DISBURSED'
+                 ]);
+            }
 
             // Unlock the transaction in the wallet
             $this->walletService->approveLoanTransaction($loan->id);

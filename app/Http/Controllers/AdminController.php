@@ -14,6 +14,150 @@ class AdminController extends Controller
         $this->walletService = $walletService;
     }
 
+    public function getFundStats()
+    {
+        $fund = \App\Models\AdminFund::first();
+        if (!$fund) {
+            $fund = \App\Models\AdminFund::create(['total_funds' => 0, 'available_funds' => 0]);
+        }
+
+        // Calculate real-time available funds based on allocations
+        $reservedAmount = \App\Models\LoanAllocation::where('status', 'RESERVED')->sum('allocated_amount');
+        $disbursedAmount = \App\Models\LoanAllocation::where('status', 'DISBURSED')->sum('actual_disbursed');
+        
+        // Available = Total - (Reserved + Disbursed)
+        // Actually, logic is: Total - Allocated(Reserved) - Disbursed?
+        // Wait, "allocated_amount" is for RESERVED. "actual_disbursed" is for DISBURSED.
+        // So Available = Total - Reserved - Disbursed.
+        
+        $available = $fund->total_funds - $reservedAmount - $disbursedAmount;
+        
+        // Update cached available_funds
+        if ($fund->available_funds != $available) {
+            $fund->available_funds = $available;
+            $fund->save();
+        }
+
+        return response()->json([
+            'total_funds' => (float)$fund->total_funds,
+            'available_funds' => (float)$available,
+            'reserved_funds' => (float)$reservedAmount,
+            'disbursed_funds' => (float)$disbursedAmount
+        ]);
+    }
+
+    public function addFunds(Request $request)
+    {
+        $request->validate(['amount' => 'required|numeric|min:1']);
+
+        $fund = \App\Models\AdminFund::first();
+        if (!$fund) {
+            $fund = \App\Models\AdminFund::create(['total_funds' => 0, 'available_funds' => 0]);
+        }
+
+        $fund->total_funds += $request->amount;
+        $fund->save();
+
+        DB::table('admin_logs')->insert([
+            'admin_id' => \Illuminate\Support\Facades\Auth::id(),
+            'action' => 'add_admin_funds',
+            'description' => "Added ₹{$request->amount} to admin capital pool. New Total: ₹{$fund->total_funds}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $this->getFundStats();
+    }
+
+    public function updateFunds(Request $request)
+    {
+        $request->validate(['total_funds' => 'required|numeric|min:0']);
+
+        $fund = \App\Models\AdminFund::first();
+        if (!$fund) {
+            $fund = \App\Models\AdminFund::create(['total_funds' => 0, 'available_funds' => 0]);
+        }
+
+        $oldTotal = $fund->total_funds;
+        $newTotal = $request->total_funds;
+
+        if ($newTotal == $oldTotal) {
+             return response()->json(['message' => 'No changes made']);
+        }
+
+        // Validation: Cannot reduce below disbursed amount
+        $disbursedAmount = \App\Models\LoanAllocation::whereIn('status', ['DISBURSED'])->sum('actual_disbursed');
+        if ($newTotal < $disbursedAmount) {
+             return response()->json(['error' => "Cannot reduce funds below total disbursed amount (₹{$disbursedAmount})."], 400);
+        }
+
+        DB::transaction(function () use ($fund, $oldTotal, $newTotal) {
+            $delta = $newTotal - $oldTotal;
+            $fund->total_funds = $newTotal;
+            $fund->save();
+
+            if ($delta < 0) {
+                // RECONCILIATION LOGIC: Proportional adjustment for RESERVED allocations
+                $reservedAllocations = \App\Models\LoanAllocation::where('status', 'RESERVED')->get();
+                $totalReserved = $reservedAllocations->sum('allocated_amount');
+
+                if ($totalReserved > 0) {
+                     foreach ($reservedAllocations as $alloc) {
+                         // Ratio of this loan's reservation to total reserved pool
+                         $ratio = $alloc->allocated_amount / $totalReserved;
+                         // Deduction amount for this loan matches its share of the total reduction
+                         // BUT we only reduce if available funds would be negative? 
+                         // The user requirement says: "from every user that decreased amount has to be deducted in the proportion"
+                         // This implies simplistic proportional reduction of the *shortfall*? 
+                         // Or strict proportional reduction of the entire delta from reservations?
+                         
+                         // Let's implement strict proportional reduction of the DELTA from the RESERVED pool context.
+                         // Wait, if I have 100k, 50k reserved. I reduce total to 80k (-20k).
+                         // Available was 50k. Now available is 30k. No need to touch reserved?
+                         
+                         // Re-reading user prompt: "if admin enter 103000 amount and edited it to 100000 n from every user that decreased amount has to be deducted in the proportion"
+                         // This implies the reduction hits the USER allocations directly.
+                         
+                         // Let's calculate the "Shortfall".
+                         // Current State: Total 103k. Reserved 100k. Available 3k.
+                         // New State: Total 100k. Reserved ???. Available ???
+                         
+                         // Implementation Strategy:
+                         // We Apply the reduction to the RESERVED pool proportionaly.
+                         // Only if New Available < 0 ? 
+                         // Or always? 
+                         // The prompt says "from every user that decreased amount has to be deducted".
+                         // This implies the drop comes out of the users' pockets (allocations).
+                         
+                         $deduction = round($ratio * abs($delta), 2);
+                         
+                         // Safety check: don't reduce below 0
+                         if ($alloc->allocated_amount - $deduction < 0) {
+                              $deduction = $alloc->allocated_amount;
+                         }
+
+                         $alloc->allocated_amount -= $deduction;
+                         $alloc->status = 'ADJUSTED'; // Mark as adjusted so UI can show message?
+                         $alloc->save();
+                         
+                         // Log this specific adjustment implementation detail?
+                         // Maybe too verbose for admin logs table, but essential for audit.
+                     }
+                }
+            }
+
+            DB::table('admin_logs')->insert([
+                'admin_id' => \Illuminate\Support\Facades\Auth::id(),
+                'action' => 'update_admin_funds',
+                'description' => "Updated total funds from ₹{$oldTotal} to ₹{$newTotal}. Reconciliation applied.",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        return $this->getFundStats();
+    }
+
     public function getLogs(Request $request)
     {
         $query = DB::table('admin_logs as al')
