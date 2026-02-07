@@ -23,7 +23,7 @@ Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
 Route::get('/merchants/nearby', [\App\Http\Controllers\MerchantController::class, 'nearby']);
 Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 'show']);
 
-Route::middleware('auth:api')->group(function () {
+Route::middleware('auth:api,sub-user')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::put('/auth/me/update', [AuthController::class, 'updateProfile']);
     Route::post('/auth/onboarding', [AuthController::class, 'completeOnboarding']);
