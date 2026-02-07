@@ -39,7 +39,7 @@ class Loan extends Model
     public function getCalculationsAttribute()
     {
         $amount = (float) $this->amount;
-        $plan = $this->relationLoaded('plan') ? $this->plan : null;
+        $plan = $this->relationLoaded('plan') ? $this->plan : ($this->loan_plan_id ? $this->plan()->first() : null);
         
         // Defaults
         $processingFee = 0;
@@ -50,6 +50,7 @@ class Loan extends Model
         $interestRate = 0;
         $totalInterest = 0;
         $frequency = $this->payout_frequency;
+        $gstRate = 18;
 
         if ($plan) {
             $tenure = $this->tenure;
@@ -105,53 +106,37 @@ class Loan extends Model
                     $interestRate = (float)$config['interest_rate'];
                 }
 
-                // Interest Calculation: Principal * Rate * Months
-                // We need 'months' for the rate application. 
-                // Assumption: Interest Rate provided is "Per Month" unless specified otherwise? 
-                // Usually these apps use monthly flat rate.
-                // If frequency is '15_DAYS', rate might be 'per 15 days'?
-                // Let's assume rate is per 'Tenure Unit' or standard Monthly.
-                
-                // If the config has specific rates for frequencies (like 15_DAYS -> 0.6%), 
-                // it implies that rate applies for that period? 
-                // Or is it a monthly rate adjusted?
-                // Given the user said "15_DAYS": 0.6 and "MONTHLY": 0.3, it seems rate varies by freq.
-                // Let's assume it IS the specific rate for the tenure duration OR monthly.
-                
                 $days = (int)($config['tenure_days'] ?? 30);
                 $months = $days / 30;
-                
-                // If the rate is small (like 0.6), it's likely per month or per period.
-                // Let's calculate simple interest: P * R% * T(months)
                 $totalInterest = round(($amount * $interestRate / 100) * $months);
             }
         }
         
         $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
-        // Total Deductions = Fees + GST + Interest (if interest is deducted upfront? User said "interests missing")
-        // Usually Interest is ADDED to repayment, not deducted from disbursal.
-        // Fees are usually deducted.
-        
-        // Logic Update: Fees are financed (added to repayment), not deducted.
-        // Disbursal = Amount (User gets full money)
-        // Repayment = Amount + Fees + GST + Interest
-
-        $totalDeductions = 0; // No upfront deductions
         $disbursalAmount = $amount;
         
         $netPayableByCustomer = $amount + $totalFees + $gst + $totalInterest;
 
+        // CRITICAL FIX: If repayments are already generated, use their sum as the Source of Truth.
+        // This prevents negative outstanding issues when plan data is missing or changed.
+        if ($this->repayments()->exists()) {
+             $repaymentTotal = (float)$this->repayments()->sum('amount');
+             if ($repaymentTotal > 0) {
+                 $netPayableByCustomer = $repaymentTotal;
+             }
+        }
+
         return [
             'principal' => $amount,
             'gst' => $gst,
-            'gst_rate' => $gstRate ?? 18,
+            'gst_rate' => $gstRate,
             'processing_fee' => $processingFee,
             'login_fee' => $loginFee,
             'field_kyc_fee' => $fieldKycFee,
             'other_fees' => $otherFees,
             'interest_rate' => $interestRate,
             'total_interest' => $totalInterest,
-            'total_deductions' => $totalDeductions, // Fees + GST
+            'total_deductions' => $totalFees + $gst, // Fees + GST for display
             'disbursal_amount' => $disbursalAmount,
             'net_payable_amount' => $netPayableByCustomer
         ];

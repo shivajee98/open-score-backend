@@ -735,13 +735,23 @@ class LoanController extends Controller
             if ($config) {
                 // Dynamic Fees from JSON
                 $fees = $config['fees'] ?? [];
+                $loginFee = 0;
+                $fieldKycFee = 0;
+                $otherFees = 0;
+
                 foreach ($fees as $fee) {
-                    // We sum up all fees for now into a generic pile, or map them?
-                    // The logic below just sums them.
-                    $processingFee += $fee['amount']; 
-                    // Note: original logic had separte fields. Now we just care about total payable?
-                    // Or do we need to store them separately? 
-                    // For now, let's just add to total fees.
+                    $fAmount = (float)($fee['amount'] ?? 0);
+                    $name = strtolower($fee['name'] ?? '');
+                    
+                    if (strpos($name, 'processing') !== false) {
+                        $processingFee += $fAmount;
+                    } elseif (strpos($name, 'login') !== false) {
+                        $loginFee += $fAmount;
+                    } elseif (strpos($name, 'field') !== false || strpos($name, 'kyc') !== false) {
+                        $fieldKycFee += $fAmount;
+                    } else {
+                        $otherFees += $fAmount;
+                    }
                 }
                 
                 // Interest
@@ -754,14 +764,15 @@ class LoanController extends Controller
                 }
                 
                  
-                // Calculate GST based on fees
+                // Calculate GST based on Processing Fees only
                 $gstRate = isset($config['gst_rate']) ? (float)$config['gst_rate'] : 18;
                 $gstAmount = round($processingFee * ($gstRate / 100)); 
 
+                $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
                 
                 // Fees are ADDED to Repayment Schedule.
                 // Repayment = Principal + Fees + GST + Interest
-                $totalPayable = $loan->amount + $processingFee + $gstAmount + $interestAmount;
+                $totalPayable = $loan->amount + $totalFees + $gstAmount + $interestAmount;
 
             } else {
                  // Fallback if config not found (shouldn't happen if validated)
