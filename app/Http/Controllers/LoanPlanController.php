@@ -84,7 +84,7 @@ class LoanPlanController extends Controller
             // but usually in Admin we want to see all non-deleted plans even if inactive.
         }
         
-        return response()->json($query->orderBy('amount', 'asc')->get());
+        return response()->json($query->orderBy('amount', 'asc')->get()->each->append('assigned_user_ids'));
     }
 
     /**
@@ -92,7 +92,7 @@ class LoanPlanController extends Controller
      */
     public function showInsights($id)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        if (\Illuminate\Support\Facades\Auth::user()->role !== 'ADMIN') {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -103,6 +103,8 @@ class LoanPlanController extends Controller
             'loans as pending_loans_count' => fn($q) => $q->whereIn('status', ['PENDING', 'PROCEEDED', 'KYC_SENT', 'FORM_SUBMITTED']),
             'loans as fully_paid_loans_count' => fn($q) => $q->where('status', 'CLOSED'), // Assuming CLOSED or PAID match
         ])->findOrFail($id);
+        
+        $plan->append('assigned_user_ids');
 
         // Calculate financial aggregates
         $totalDisbursed = $plan->loans()->where('status', 'DISBURSED')->sum('amount');
@@ -152,6 +154,7 @@ class LoanPlanController extends Controller
             $plan->users()->sync($request->assigned_user_ids);
         }
 
+        $plan->append('assigned_user_ids');
         return response()->json($plan, 201);
     }
 
@@ -173,6 +176,7 @@ class LoanPlanController extends Controller
             $plan->users()->detach(); // If turned public, remove specific assignments
         }
 
+        $plan->append('assigned_user_ids');
         return response()->json($plan);
     }
 
