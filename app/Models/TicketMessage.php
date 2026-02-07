@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
+
 class TicketMessage extends Model
 {
     use HasFactory;
@@ -16,6 +18,17 @@ class TicketMessage extends Model
         'attachment_url',
         'is_admin_reply',
     ];
+
+    protected function attachmentUrl(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if (!$value) return null;
+                if (filter_var($value, FILTER_VALIDATE_URL)) return $value;
+                return asset('storage/' . $value);
+            },
+        );
+    }
 
     public function ticket()
     {

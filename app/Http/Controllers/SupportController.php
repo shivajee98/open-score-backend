@@ -161,18 +161,23 @@ class SupportController extends Controller
 
         $validator = Validator::make($request->all(), [
             'message' => 'required|string',
-            'attachment_url' => 'nullable|string',
+            'attachment' => 'nullable|file|max:16384', // 16MB file
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        $attachmentUrl = null;
+        if ($request->hasFile('attachment')) {
+            $attachmentUrl = $request->file('attachment')->store('attachments', 'public');
+        }
+
         $message = TicketMessage::create([
             'support_ticket_id' => $ticket->id,
             'user_id' => $user->id,
             'message' => $request->message,
-            'attachment_url' => $request->attachment_url,
+            'attachment_url' => $attachmentUrl,
             'is_admin_reply' => in_array($user->role, ['ADMIN', 'SUPPORT']),
         ]);
         

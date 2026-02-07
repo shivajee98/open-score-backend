@@ -233,7 +233,7 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|string',
+            'profile_image' => 'nullable|image|max:2048', // Updated to 2MB image file
             'shop_image' => 'nullable|image|max:10240', // 10MB
         ]);
 
@@ -244,14 +244,15 @@ class AuthController extends Controller
             $user->business_name = $request->business_name;
         }
 
-        // Support direct Cloudinary URL from frontend
-        if ($request->filled('profile_image')) {
-            $user->profile_image = $request->profile_image;
+        // Handle profile image upload
+        if ($request->hasFile('profile_image')) {
+            $path = $request->file('profile_image')->store('profiles', 'public');
+            $user->profile_image = $path; // Store relative path
         } 
-        // Fallback to direct file upload handling
+        // Fallback to direct file upload handling (shop_image as profile_image fallback? previous code had this)
         elseif ($request->hasFile('shop_image')) {
             $path = $request->file('shop_image')->store('merchants', 'public');
-            $user->profile_image = asset('storage/' . $path);
+            $user->profile_image = $path; // Store relative path
         }
 
         $user->is_onboarded = true;
@@ -428,7 +429,8 @@ class AuthController extends Controller
             'business_segment' => 'nullable|string|max:255',
             'business_type' => 'nullable|string|max:255',
             'map_location_url' => 'nullable|string|max:500',
-            'shop_images' => 'nullable|string', // JSON string from frontend
+            'shop_images' => 'nullable|array',
+            'shop_images.*' => 'image|max:2048', // 2MB per image
         ]);
 
         $user = \App\Models\User::find(Auth::id());
@@ -442,7 +444,14 @@ class AuthController extends Controller
         if ($request->has('business_segment')) $user->business_segment = $request->business_segment;
         if ($request->has('business_type')) $user->business_type = $request->business_type;
         if ($request->has('map_location_url')) $user->map_location_url = $request->map_location_url;
-        if ($request->has('shop_images')) $user->shop_images = $request->shop_images;
+        
+        if ($request->hasFile('shop_images')) {
+            $paths = [];
+            foreach ($request->file('shop_images') as $image) {
+                $paths[] = $image->store('merchants', 'public');
+            }
+            $user->shop_images = $paths; // Model cast handles array to JSON
+        }
 
         // Only allow bank details update if not already set
         if (!$user->account_number) {

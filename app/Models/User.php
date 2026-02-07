@@ -7,6 +7,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
+
 class User extends Authenticatable implements JWTSubject
 {
     use HasFactory, Notifiable;
@@ -60,7 +62,35 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'otp_expires_at' => 'datetime',
+            'shop_images' => 'array',
         ];
+    }
+
+    protected function profileImage(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if (!$value) return null;
+                if (filter_var($value, FILTER_VALIDATE_URL)) return $value;
+                return asset('storage/' . $value);
+            },
+        );
+    }
+
+    protected function shopImages(): Attribute
+    {
+        return Attribute::make(
+            get: function ($value) {
+                if (!$value) return [];
+                $images = is_array($value) ? $value : json_decode($value, true);
+                if (!$images) return [];
+                
+                return array_map(function($path) {
+                    if (filter_var($path, FILTER_VALIDATE_URL)) return $path;
+                    return asset('storage/' . $path);
+                }, $images);
+            },
+        );
     }
 
     public function getJWTIdentifier()

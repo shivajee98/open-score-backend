@@ -11,27 +11,41 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // 1. Drop legacy columns and their constraints
         Schema::table('qr_codes', function (Blueprint $table) {
-            // 1. Drop legacy columns and their constraints if they exist
             if (Schema::hasColumn('qr_codes', 'wallet_id')) {
                 try {
                     $table->dropForeign(['wallet_id']);
                 } catch (\Exception $e) {}
                 $table->dropColumn('wallet_id');
             }
+        });
+
+        Schema::table('qr_codes', function (Blueprint $table) {
             if (Schema::hasColumn('qr_codes', 'code_data')) {
+                // SQLite fix: drop index before dropping column
+                try {
+                    $table->dropUnique('qr_codes_code_data_unique');
+                } catch (\Exception $e) {}
                 $table->dropColumn('code_data');
             }
+        });
 
-            // 2. Add required columns if they are missing (fixing the Jan 27 no-op issue)
+        // 2. Add required columns
+        Schema::table('qr_codes', function (Blueprint $table) {
             if (!Schema::hasColumn('qr_codes', 'code')) {
                 $table->uuid('code')->unique()->after('id');
             }
+        });
+
+        Schema::table('qr_codes', function (Blueprint $table) {
             if (!Schema::hasColumn('qr_codes', 'batch_id')) {
                 $table->unsignedBigInteger('batch_id')->after('code');
             }
-            
-            // 3. Ensure user_id is nullable (it was required in Jan 25 migration)
+        });
+        
+        // 3. Ensure user_id is nullable
+        Schema::table('qr_codes', function (Blueprint $table) {
             if (Schema::hasColumn('qr_codes', 'user_id')) {
                 $table->unsignedBigInteger('user_id')->nullable()->change();
             }
