@@ -92,4 +92,15 @@ if (Schema::hasTable('loans')) {
     echo "Loans table fixed.\n";
 }
 
+// 4. Fix Loan Plans Table (Added is_locked)
+if (Schema::hasTable('loan_plans')) {
+    echo "Checking loan_plans table for is_locked column...\n";
+    Schema::table('loan_plans', function (Blueprint $table) {
+        if (!Schema::hasColumn('loan_plans', 'is_locked')) {
+            echo "Adding is_locked column to loan_plans\n";
+            $table->boolean('is_locked')->default(false)->after('is_public');
+        }
+    });
+}
+
 echo "Schema Fix Completed.\n";

@@ -9,12 +9,6 @@ $app = require_once __DIR__ . '/bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
-// Safety check for public access
-if (php_sapi_name() !== 'cli' && ($_GET['secret'] ?? '') !== 'open_fix_2026') {
-    die("Unauthorized access. Please provide the correct secret.");
-}
-
-echo "<pre>"; // For better web readability
 echo "Checking Database Schema...\n";
 
 // 1. Check qr_batches table
@@ -96,6 +90,17 @@ if (Schema::hasTable('loans')) {
         $table->string('status')->default('PENDING')->change();
     });
     echo "Loans table fixed.\n";
+}
+
+// 4. Fix Loan Plans Table (Added is_locked)
+if (Schema::hasTable('loan_plans')) {
+    echo "Checking loan_plans table for is_locked column...\n";
+    Schema::table('loan_plans', function (Blueprint $table) {
+        if (!Schema::hasColumn('loan_plans', 'is_locked')) {
+            echo "Adding is_locked column to loan_plans\n";
+            $table->boolean('is_locked')->default(false)->after('is_public');
+        }
+    });
 }
 
 echo "Schema Fix Completed.\n";

@@ -17,11 +17,13 @@ class LoanPlan extends Model
         'tag_text',
         'is_active',
         'is_public',
+        'is_locked',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_public' => 'boolean',
+        'is_locked' => 'boolean',
         'amount' => 'decimal:2',
         'configurations' => 'array',
     ];

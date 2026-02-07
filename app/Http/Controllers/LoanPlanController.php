@@ -33,18 +33,15 @@ class LoanPlanController extends Controller
 
         $plans->transform(function ($plan) use ($plans, $takenAmounts) {
             $amount = (float)$plan->amount;
-            $isLocked = false;
+            $isLocked = $plan->is_locked; // respect the manual lock
 
-            // Lock logic for > 50k
-            if ($amount > 50000) {
+            // Lock logic for > 50k (keep existing automatic logic)
+            if (!$isLocked && $amount > 50000) {
                 // Find previous level plan (largest amount strictly less than current)
                 $prevPlan = $plans->where('amount', '<', $amount)->sortByDesc('amount')->first();
                 
                 if ($prevPlan) {
                     $prevAmount = (float)$prevPlan->amount;
-                    // Check if user has taken the previous amount
-                    // Using loose comparison or small epsilon might be safer for floats, but strict in_array usually works if stored same.
-                    // Let's rely on db stored values match.
                     if (!in_array($prevAmount, $takenAmounts)) {
                         $isLocked = true;
                     }
@@ -145,7 +142,8 @@ class LoanPlanController extends Controller
             'configurations.*.fees.*.name' => 'required_with:configurations.*.fees|string',
             'configurations.*.fees.*.amount' => 'required_with:configurations.*.fees|numeric',
             'configurations.*.cashback' => 'array', // Key: Freq, Value: Amount
-            'plan_color' => 'required|string'
+            'plan_color' => 'required|string',
+            'is_locked' => 'nullable|boolean'
         ]);
 
         $plan = LoanPlan::create($request->all());
