@@ -61,6 +61,7 @@ class SubUserController extends Controller
         // Basic Stats
         $referredUsers = User::where('sub_user_id', $id)->get();
         $referredUserIds = $referredUsers->pluck('id');
+        $walletIds = \App\Models\Wallet::whereIn('user_id', $referredUserIds)->pluck('id');
         
         $customerCount = $referredUsers->where('role', 'CUSTOMER')->count();
         $merchantCount = $referredUsers->where('role', 'MERCHANT')->count();
@@ -72,13 +73,23 @@ class SubUserController extends Controller
         $disbursedLoansCount = $loans->where('status', 'DISBURSED')->count();
         $totalLoanVolume = $loans->whereIn('status', ['APPROVED', 'DISBURSED', 'CLOSED'])->sum('amount');
 
+        // Transaction Summaries
+        $transactions = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)->get();
+        
+        // EMIs Paid (Assuming DEBIT from user wallet for loan repayment)
+        $totalEmisPaid = $transactions->where('type', 'DEBIT')->sum('amount');
+        
+        // Cashback Given (Assuming CREDIT to user wallet from system for bonus)
+        // Adjusting logic: Sum signup_cashback_received from referred users
+        $totalCashbackGiven = $referredUsers->sum('signup_cashback_received');
+
         // Recent Activity
         $recentUsers = User::where('sub_user_id', $id)
             ->orderBy('created_at', 'desc')
             ->limit(10)
             ->get();
 
-        $recentTransactions = \App\Models\WalletTransaction::whereIn('wallet_id', \App\Models\Wallet::whereIn('user_id', $referredUserIds)->pluck('id'))
+        $recentTransactions = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
             ->with('user:id,name,business_name,role')
             ->orderBy('created_at', 'desc')
             ->limit(15)
@@ -87,7 +98,7 @@ class SubUserController extends Controller
         $recentLoans = Loan::whereIn('user_id', $referredUserIds)
             ->with('user:id,name,business_name,role')
             ->orderBy('created_at', 'desc')
-            ->limit(5)
+            ->limit(10)
             ->get();
         
         return response()->json([
@@ -96,10 +107,13 @@ class SubUserController extends Controller
                 'total_users' => $referredUsers->count(),
                 'customers' => $customerCount,
                 'merchants' => $merchantCount,
+                'total_emis_paid' => $totalEmisPaid,
+                'total_cashback_given' => $totalCashbackGiven,
                 'loans' => [
                     'total' => $totalLoansCount,
                     'approved' => $approvedLoansCount,
                     'disbursed' => $disbursedLoansCount,
+                    'pending' => $loans->where('status', 'PENDING')->count(),
                     'volume' => $totalLoanVolume
                 ]
             ],
