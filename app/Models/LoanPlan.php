@@ -28,7 +28,7 @@ class LoanPlan extends Model
         'configurations' => 'array',
     ];
 
-    protected $appends = ['assigned_user_ids'];
+    protected $appends = [];
 
     public function getAssignedUserIdsAttribute()
     {
