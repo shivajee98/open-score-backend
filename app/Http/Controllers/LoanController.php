@@ -285,6 +285,9 @@ class LoanController extends Controller
                             $interestRate = (float)$config['interest_rate'];
                         }
                         
+                        // Extract GST Rate
+                        $gstRate = isset($config['gst_rate']) ? (float)$config['gst_rate'] : 18;
+                        
                         break;
                     }
                 }
@@ -295,10 +298,9 @@ class LoanController extends Controller
         $months = $tenureDays / 30;
         $totalInterest = round(($amount * $interestRate / 100) * $months);
         
-        // Fallback GST if not in fees
-        if ($gst == 0) {
-            $gst = round($amount * 0.18);
-        }
+        // Calculate GST based on Processing Fees only
+        $gstRate = $gstRate ?? 18; // Default 18 if not found in config
+        $gst = round($processingFee * ($gstRate / 100));
         
         // Calculate totals
         $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
@@ -751,7 +753,11 @@ class LoanController extends Controller
                      $interestAmount = ($amount * ($effectiveRate / 100)) * $months;
                 }
                 
-                $gstAmount = round($amount * 0.18); // Keep 18% rule?
+                 
+                // Calculate GST based on fees
+                $gstRate = isset($config['gst_rate']) ? (float)$config['gst_rate'] : 18;
+                $gstAmount = round($processingFee * ($gstRate / 100)); 
+
                 
                 // Fees are ADDED to Repayment Schedule.
                 // Repayment = Principal + Fees + GST + Interest

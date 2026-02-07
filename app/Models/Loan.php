@@ -70,6 +70,9 @@ class Loan extends Model
             }
 
             if ($config) {
+                // Extract GST Rate
+                $gstRate = isset($config['gst_rate']) ? (float)$config['gst_rate'] : 18;
+
                 // FEES
                 $fees = $config['fees'] ?? [];
                 foreach ($fees as $fee) {
@@ -87,6 +90,11 @@ class Loan extends Model
                     } else {
                         $otherFees += $fAmount;
                     }
+                }
+
+                // GST Calculation based on Processing Fees
+                if ($gst == 0) {
+                    $gst = round($processingFee * ($gstRate / 100));
                 }
 
                 // INTEREST
@@ -119,11 +127,6 @@ class Loan extends Model
             }
         }
         
-        // Fallback GST if not found in fees but we want to enforce it (Legacy/Safety)
-        if ($gst == 0) {
-             $gst = round($amount * 0.18);
-        }
-
         $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
         // Total Deductions = Fees + GST + Interest (if interest is deducted upfront? User said "interests missing")
         // Usually Interest is ADDED to repayment, not deducted from disbursal.
@@ -141,6 +144,7 @@ class Loan extends Model
         return [
             'principal' => $amount,
             'gst' => $gst,
+            'gst_rate' => $gstRate ?? 18,
             'processing_fee' => $processingFee,
             'login_fee' => $loginFee,
             'field_kyc_fee' => $fieldKycFee,
