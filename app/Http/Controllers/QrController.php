@@ -12,39 +12,61 @@ class QrController extends Controller
 {
     public function generate(Request $request)
     {
+        // Ensure only ADMIN can generate
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['message' => 'Unauthorized: Only admins can generate QR batches'], 403);
+        }
+
         $request->validate([
             'count' => 'required|integer|min:1|max:1000',
             'name' => 'nullable|string'
         ]);
 
-        $batchId = DB::table('qr_batches')->insertGetId([
-            'name' => $request->name ?? 'Batch ' . date('Y-m-d H:i:s'),
-            'count' => $request->count,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        try {
+            DB::beginTransaction();
 
-        $codes = [];
-        for ($i = 0; $i < $request->count; $i++) {
-            $codes[] = [
-                'batch_id' => $batchId,
-                'code' => (string) Str::uuid(),
-                'status' => 'active',
+            $batchId = DB::table('qr_batches')->insertGetId([
+                'name' => $request->name ?? 'Batch ' . date('Y-m-d H:i:s'),
+                'count' => $request->count,
                 'created_at' => now(),
                 'updated_at' => now(),
-            ];
-        }
+            ]);
 
-        // Insert in chunks to avoid limits
-        foreach (array_chunk($codes, 100) as $chunk) {
-            DB::table('qr_codes')->insert($chunk);
-        }
+            $codes = [];
+            for ($i = 0; $i < $request->count; $i++) {
+                $codes[] = [
+                    'batch_id' => $batchId,
+                    'code' => (string) Str::uuid(),
+                    'status' => 'active',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
 
-        return response()->json([
-            'message' => 'QR Codes generated successfully',
-            'batch_id' => $batchId,
-            'count' => $request->count
-        ]);
+            // Insert in chunks to avoid limits
+            foreach (array_chunk($codes, 100) as $chunk) {
+                DB::table('qr_codes')->insert($chunk);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'QR Codes generated successfully',
+                'batch_id' => $batchId,
+                'count' => $request->count
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Illuminate\Support\Facades\Log::error('QR Generation Failure: ' . $e->getMessage(), [
+                'exception' => $e,
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to generate QR codes. Please check server logs.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function getBatches()
