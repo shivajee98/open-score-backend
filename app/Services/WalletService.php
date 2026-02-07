@@ -195,4 +195,71 @@ class WalletService
             }
         });
     }
+
+    public function getSystemWallet(): Wallet
+    {
+        $systemUser = \App\Models\User::where('role', 'SYSTEM')->first();
+        if (!$systemUser) throw new Exception("System User not found. Please run seeders.");
+        
+        if (!$systemUser->wallet) {
+            return $this->createWallet($systemUser->id);
+        }
+        
+        return $systemUser->wallet;
+    }
+
+    // Transfer from System to User (Cashback, Bonuses, Loan Disbursal)
+    // OR User to System (Repayments) - direction controlled by $direction
+    // direction: 'OUT' (System -> User), 'IN' (User -> System)
+    public function transferSystemFunds(int $userId, float $amount, string $type, string $description, string $direction = 'OUT'): array
+    {
+        return DB::transaction(function () use ($userId, $amount, $type, $description, $direction) {
+            $systemWallet = $this->getSystemWallet();
+            $userWallet = $this->getWallet($userId);
+            
+            if (!$userWallet) throw new Exception("User Wallet not found");
+
+            $txs = [];
+
+            if ($direction === 'OUT') {
+                // System Debit
+                $this->debit(
+                    $systemWallet->id, 
+                    $amount, 
+                    $type, 
+                    $userWallet->id, 
+                    "System Transfer to User: {$description}" // Description for System View
+                );
+                
+                // User Credit
+                $txs['credit'] = $this->credit(
+                    $userWallet->id,
+                    $amount,
+                    $type, // Keep original type like 'CASHBACK', 'LOAN_DISBURSAL'
+                    $systemWallet->id,
+                    $description // Description for User View
+                );
+            } else {
+                // User Debit
+                 $this->debit(
+                    $userWallet->id, 
+                    $amount, 
+                    $type, 
+                    $systemWallet->id, 
+                    $description
+                );
+                
+                // System Credit
+                $txs['credit'] = $this->credit(
+                    $systemWallet->id,
+                    $amount,
+                    $type,
+                    $userWallet->id,
+                    "Received from User: {$description}"
+                );
+            }
+            
+            return $txs;
+        });
+    }
 }

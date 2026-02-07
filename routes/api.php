@@ -99,6 +99,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/funds/{id}/reject', [AdminController::class, 'rejectFund']);
     
     // Admin Fund Management (New)
+    Route::get('/admin/transactions/all', [AdminController::class, 'getAllTransactions']);
     Route::get('/admin/funds/stats', [AdminController::class, 'getFundStats']);
     Route::post('/admin/funds/add', [AdminController::class, 'addFunds']);
     Route::post('/admin/funds/update', [AdminController::class, 'updateFunds']);

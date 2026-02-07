@@ -582,4 +582,39 @@ class AdminController extends Controller
             'transactions' => $transactions
         ]);
     }
+    public function getAllTransactions(Request $request) 
+    {
+        if (\Illuminate\Support\Facades\Auth::user()->role !== 'ADMIN') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $query = \App\Models\WalletTransaction::with(['wallet.user']);
+        
+        // We also want to know the sender if it's a transfer
+        // But WalletTransaction model might not have 'sourceWallet' relationship defined yet.
+        // Let's check WalletTransaction model later. For now, assume we can get source info.
+        
+        if ($request->has('search') && $request->search) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('type', 'like', "%{$search}%")
+                  ->orWhereHas('wallet.user', function($uq) use ($search) {
+                      $uq->where('name', 'like', "%{$search}%")
+                         ->orWhere('mobile_number', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        if ($request->has('type') && $request->type && $request->type !== 'ALL') {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->has('status') && $request->status && $request->status !== 'ALL') {
+            $query->where('status', $request->status);
+        }
+
+        return response()->json($query->orderBy('created_at', 'desc')->paginate($request->get('per_page', 50)));
+    }
 }

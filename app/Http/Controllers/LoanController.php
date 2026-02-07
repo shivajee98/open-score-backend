@@ -732,6 +732,16 @@ class LoanController extends Controller
             // Unlock the transaction in the wallet
             $this->walletService->approveLoanTransaction($loan->id);
 
+            // Debit System Wallet for Disbursal
+            $systemWallet = $this->walletService->getSystemWallet();
+            $this->walletService->debit(
+                $systemWallet->id, 
+                $loan->amount, 
+                'LOAN_DISBURSAL', 
+                $loan->id, 
+                "Disbursal for Loan #{$loan->id}"
+            );
+
             // Generate Repayment Schedule
             $this->generateRepaymentSchedule($loan);
 
@@ -745,12 +755,12 @@ class LoanController extends Controller
                     // Credit loan disbursement bonus to referrer
                     $referrerWallet = \App\Models\Wallet::where('user_id', $referralRecord->referrer_id)->first();
                     if ($referrerWallet && $loanBonus > 0) {
-                        $this->walletService->credit(
-                            $referrerWallet->id,
+                        $this->walletService->transferSystemFunds(
+                            $referralRecord->referrer_id,
                             $loanBonus,
                             'REFERRAL_LOAN_BONUS',
-                            $loan->user_id,
-                            "Loan disbursement bonus for referred user loan #" . $loan->id
+                            "Loan disbursement bonus for referred user loan #" . $loan->id,
+                            'OUT'
                         );
                         
                         // Update referral record
@@ -974,7 +984,14 @@ class LoanController extends Controller
         }
 
         DB::transaction(function () use ($loan, $repayment, $wallet) {
-            $this->walletService->debit($wallet->id, $repayment->amount, 'LOAN_REPAYMENT', $repayment->id, "EMI Payment - #{$repayment->id}");
+            // Transfer from User to System
+            $this->walletService->transferSystemFunds(
+                $wallet->user_id,
+                $repayment->amount,
+                'LOAN_REPAYMENT',
+                "EMI Payment - #{$repayment->id}",
+                'IN'
+            );
 
             $repayment->status = 'PAID';
             $repayment->paid_at = now();

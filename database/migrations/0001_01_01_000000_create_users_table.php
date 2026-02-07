@@ -13,7 +13,7 @@ return new class extends Migration
             $table->string('name')->nullable();
             $table->string('mobile_number')->unique();
             $table->string('email')->nullable()->unique();
-            $table->enum('role', ['CUSTOMER', 'MERCHANT', 'ADMIN'])->default('CUSTOMER');
+            $table->enum('role', ['CUSTOMER', 'MERCHANT', 'ADMIN', 'SUPPORT', 'SYSTEM'])->default('CUSTOMER');
             $table->string('business_name')->nullable();
             $table->string('profile_image')->nullable();
             $table->boolean('is_onboarded')->default(false);

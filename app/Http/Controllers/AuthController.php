@@ -133,15 +133,14 @@ class AuthController extends Controller
                           'signup_bonus_paid' => false
                       ]);
                       
-                      // Credit signup bonus to referrer immediately
-                      $referrerWallet = \App\Models\Wallet::where('user_id', $referrerId)->first();
-                      if ($referrerWallet) {
-                          $walletService->credit(
-                              $referrerWallet->id,
+                          
+                          // Credit signup bonus to referrer from System Wallet
+                          $walletService->transferSystemFunds(
+                              $referrerId,
                               $signupBonus,
                               'REFERRAL_SIGNUP_BONUS',
-                              $user->id,
-                              "Referral bonus for {$user->mobile_number} signup"
+                              "Referral bonus for {$user->mobile_number} signup",
+                              'OUT'
                           );
                           
                           // Mark as paid
@@ -149,7 +148,7 @@ class AuthController extends Controller
                               'signup_bonus_paid' => true,
                               'signup_bonus_paid_at' => now()
                           ]);
-                      }
+                      
                   }
 
                   // Credit Referral/Signup Bonus to new user
@@ -171,12 +170,13 @@ class AuthController extends Controller
                               );
                           }
                       } else {
-                          $walletService->credit(
-                              $wallet->id,
+                          // Standard bonus from System Wallet
+                          $walletService->transferSystemFunds(
+                              $user->id,
                               $cashbackAmount,
                               $referralCampaignId ? 'REFERRAL_BONUS' : ($referrerId ? 'REFERRAL_WELCOME_BONUS' : 'SIGNUP_BONUS'),
-                              $user->id,
-                              $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus')
+                              $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus'),
+                              'OUT'
                           );
                       }
                   }
