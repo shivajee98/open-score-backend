@@ -386,6 +386,7 @@ class AuthController extends Controller
             $user->save();
         }
         
+        $user->append('active_locked_balance');
         return response()->json($user);
     }
 

@@ -76,7 +76,7 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 
-    protected $appends = ['active_locked_balance'];
+    protected $appends = [];
 
     public function wallet()
     {
