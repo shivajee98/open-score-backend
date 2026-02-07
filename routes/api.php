@@ -9,6 +9,8 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\QrController;
 use App\Http\Controllers\SupportController;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Auth;
 
 Route::post('/auth/otp', [AuthController::class, 'requestOtp']);
 Route::post('/auth/verify', [AuthController::class, 'verifyOtp']);
@@ -174,6 +176,27 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/admin/cashback-settings', [\App\Http\Controllers\AdminController::class, 'getCashbackSettings']);
     Route::put('/admin/cashback-settings/{role}', [\App\Http\Controllers\AdminController::class, 'updateCashbackSetting']);
     
+    // Developer Utils (Temporary fix for remote schema errors)
+    Route::get('/admin/dev/fix-db', function() {
+        if (Auth::user()->role !== 'ADMIN') abort(403);
+        
+        $output = "";
+        try {
+            // Include and run the logic from fix_db.php
+            // We can just call it via Artisan if we prefer, but let's be direct
+            Artisan::call('migrate', ['--force' => true]);
+            $output .= "Migrations run: " . Artisan::output() . "\n";
+            
+            // Also run the manual fix script to be double sure
+            ob_start();
+            include base_path('fix_db.php');
+            $output .= ob_get_clean();
+            
+            return response($output)->header('Content-Type', 'text/plain');
+        } catch (\Exception $e) {
+            return response($e->getMessage(), 500);
+        }
+    });
 });
 
 // Sub-User Login (Public)
