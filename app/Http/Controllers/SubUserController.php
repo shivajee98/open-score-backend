@@ -186,15 +186,12 @@ class SubUserController extends Controller
         }
 
         try {
-            // Use standard attempt with mobile and fixed password (which we set as the OTP)
-            $token = auth('sub-user')->attempt([
-                'mobile_number' => $mobile,
-                'password' => $otp
-            ]);
+            // Bypass password check since OTP is already verified above
+            $token = auth('sub-user')->login($subUser);
             
             if (!$token) {
-                \Illuminate\Support\Facades\Log::warning('Login attempt failed for:', ['mobile' => $mobile]);
-                return response()->json(['error' => 'Invalid OTP'], 401);
+                \Illuminate\Support\Facades\Log::warning('Token generation failed for:', ['mobile' => $mobile]);
+                return response()->json(['error' => 'Authentication error'], 500);
             }
 
             return response()->json([
