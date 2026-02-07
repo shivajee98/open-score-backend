@@ -260,6 +260,33 @@ class AuthController extends Controller
         // Generate fresh token with updated is_onboarded claim
         $token = Auth::guard('api')->login($user);
 
+        // Credit signup bonus for CUSTOMER (matches Merchant behavior)
+        if ($user->role === 'CUSTOMER') {
+            $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'CUSTOMER')
+                ->where('is_active', true)
+                ->first();
+            
+            $bonusAmount = $cashbackSetting ? $cashbackSetting->cashback_amount : 100;
+            
+            if ($bonusAmount > 0) {
+                // Check if already credited via SIGNUP_BONUS or similar to avoid double-dip
+                $exists = \App\Models\WalletTransaction::where('wallet_id', $wallet->id)
+                    ->where('type', 'CREDIT')
+                    ->whereIn('source_type', ['SIGNUP_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS', 'REFERRAL_WELCOME_BONUS'])
+                    ->exists();
+
+                if (!$exists) {
+                    $walletService->credit(
+                        $wallet->id, 
+                        $bonusAmount, 
+                        'ONBOARDING_BONUS', 
+                        $user->id, 
+                        'Welcome bonus for Account Onboarding'
+                    );
+                }
+            }
+        }
+
         return response()->json([
             'message' => 'Onboarding completed',
             'user' => $user,
@@ -315,13 +342,21 @@ class AuthController extends Controller
         $bonusAmount = $cashbackSetting ? $cashbackSetting->cashback_amount : 250;
         
         if ($bonusAmount > 0) {
-            $walletService->credit(
-                $wallet->id, 
-                $bonusAmount, 
-                'ONBOARDING_BONUS', 
-                $user->id, 
-                'Welcome bonus for Merchant Profile Completion'
-            );
+            // Check if already credited to avoid double-dip
+            $exists = \App\Models\WalletTransaction::where('wallet_id', $wallet->id)
+                ->where('type', 'CREDIT')
+                ->whereIn('source_type', ['SIGNUP_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS', 'REFERRAL_WELCOME_BONUS'])
+                ->exists();
+
+            if (!$exists) {
+                $walletService->credit(
+                    $wallet->id, 
+                    $bonusAmount, 
+                    'ONBOARDING_BONUS', 
+                    $user->id, 
+                    'Welcome bonus for Merchant Profile Completion'
+                );
+            }
         }
 
         // Generate fresh token with updated is_onboarded claim

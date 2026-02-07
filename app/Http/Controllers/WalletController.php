@@ -90,6 +90,9 @@ class WalletController extends Controller
                 }
             } elseif ($tx->source_type === 'LOAN') {
                 $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Loan Disbursed' : 'Loan Repayment';
+            } elseif ($tx->source_type === 'ADMIN_CREDIT') {
+                $tx->counterparty_name = 'System Credit';
+                $tx->counterparty_vpa = 'support@openscore';
             }
 
             return $tx;

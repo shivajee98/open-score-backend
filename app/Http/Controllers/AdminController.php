@@ -307,14 +307,14 @@ class AdminController extends Controller
             $wallet = $this->walletService->createWallet($user->id);
         }
 
-        // Create PENDING transaction
+        // Create COMPLETED transaction
         $this->walletService->credit(
             $wallet->id,
             $request->amount,
             'ADMIN_CREDIT',
             \Illuminate\Support\Facades\Auth::id(),
-            "Admin Manual Credit (Pending Approval)",
-            'PENDING'
+            "Admin Manual Credit (Instant)",
+            'COMPLETED'
         );
 
         DB::table('admin_logs')->insert([
