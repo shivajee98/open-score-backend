@@ -396,6 +396,12 @@ class AdminController extends Controller
                             'business_name' => $tx->sourceWallet->user->business_name ?? null,
                             'mobile' => $tx->sourceWallet->user->mobile_number ?? null,
                         ];
+                    } elseif ($tx->source_type === 'LOAN' || $tx->source_type === 'LOAN_REPAYMENT') {
+                        $paidTo = [
+                            'name' => 'Open Score',
+                            'business_name' => 'Loan Ledger',
+                            'mobile' => '#' . $tx->source_id,
+                        ];
                     }
                     return [
                         'id' => $tx->id,
@@ -422,7 +428,7 @@ class AdminController extends Controller
                 'aadhaar_number' => $user->aadhaar_number,
                 'pan_number' => $user->pan_number,
                 'created_at' => $user->created_at,
-                'wallet_balance' => $walletId ? $this->walletService->getBalance($user->id) : 0
+                'wallet_balance' => $walletId ? (float)$this->walletService->getBalance($walletId) : 0
             ],
             'loans' => [
                 'ongoing' => $ongoingLoans->values(),
