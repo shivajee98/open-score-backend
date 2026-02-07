@@ -113,7 +113,8 @@ class AuthController extends Controller
                       'is_onboarded' => false,
                       'password' => bcrypt('password'),
                       'referral_campaign_id' => $referralCampaignId,
-                      'sub_user_id' => $subUserId
+                      'sub_user_id' => $subUserId,
+                      'my_referral_code' => strtoupper(\Illuminate\Support\Str::random(8))
                   ]);
 
                   // Create Wallet for new user
@@ -183,6 +184,13 @@ class AuthController extends Controller
 
 
              } else {
+                 
+                 // Ensure existing user has a referral code
+                 if (empty($user->my_referral_code)) {
+                     $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
+                     $user->save();
+                 }
+
                  // If user exists but is not onboarded, update the role if provided
                  if (!$user->is_onboarded && $role) {
                      $user->role = $role;
@@ -371,7 +379,14 @@ class AuthController extends Controller
 
     public function me()
     {
-        return response()->json(Auth::guard('api')->user());
+        $user = Auth::guard('api')->user();
+
+        if (empty($user->my_referral_code)) {
+            $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
+            $user->save();
+        }
+        
+        return response()->json($user);
     }
 
     public function logout()
