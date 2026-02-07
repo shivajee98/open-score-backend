@@ -134,11 +134,16 @@ class QrController extends Controller
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        DB::transaction(function () {
-            DB::table('qr_codes')->delete();
-            DB::table('qr_batches')->delete();
-        });
+        try {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0');
+            DB::table('qr_codes')->truncate();
+            DB::table('qr_batches')->truncate();
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
 
-        return response()->json(['message' => 'All batches and codes deleted successfully']);
+            return response()->json(['message' => 'All batches and codes deleted successfully']);
+        } catch (\Exception $e) {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            return response()->json(['message' => 'Error clearing data: ' . $e->getMessage()], 500);
+        }
     }
 }
