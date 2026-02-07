@@ -25,10 +25,15 @@ class SupportController extends Controller
         return response()->json($tickets);
     }
 
-    // List all tickets for Admin
+    // List all tickets for Admin/Support
     public function adminIndex(Request $request)
     {
         $user = Auth::user();
+
+        // Allow SUPPORT role
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $tickets = SupportTicket::with(['user', 'messages' => function($q) {
                 $q->latest()->limit(1);
@@ -54,7 +59,7 @@ class SupportController extends Controller
     public function assign(Request $request, $id)
     {
         $user = Auth::user();
-        if ($user->role !== 'ADMIN') {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -116,7 +121,7 @@ class SupportController extends Controller
         $ticket = SupportTicket::with(['messages.user', 'user'])->findOrFail($id);
 
         // Authorization check
-        if ($user->role !== 'ADMIN' && $ticket->user_id !== $user->id) {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT']) && $ticket->user_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -129,7 +134,7 @@ class SupportController extends Controller
         $user = Auth::user();
         $ticket = SupportTicket::findOrFail($id);
 
-        if ($user->role !== 'ADMIN' && $ticket->user_id !== $user->id) {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT']) && $ticket->user_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -150,7 +155,7 @@ class SupportController extends Controller
         $user = Auth::user();
         $ticket = SupportTicket::findOrFail($id);
 
-        if ($user->role !== 'ADMIN' && $ticket->user_id !== $user->id) {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT']) && $ticket->user_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -168,7 +173,7 @@ class SupportController extends Controller
             'user_id' => $user->id,
             'message' => $request->message,
             'attachment_url' => $request->attachment_url,
-            'is_admin_reply' => $user->role === 'ADMIN',
+            'is_admin_reply' => in_array($user->role, ['ADMIN', 'SUPPORT']),
         ]);
         
         // Broadcast event
@@ -190,25 +195,34 @@ class SupportController extends Controller
         return response()->json($message, 201);
     }
 
-    // Update ticket status/priority (Admin or User closing their own ticket)
+    // Update ticket status/priority (Admin/Support or User closing their own ticket)
     public function updateStatus(Request $request, $id)
     {
         $user = Auth::user();
         $ticket = SupportTicket::findOrFail($id);
 
-        if ($user->role !== 'ADMIN' && $ticket->user_id !== $user->id) {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT']) && $ticket->user_id !== $user->id) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         // Users can only close tickets
-        if ($user->role !== 'ADMIN' && $request->status !== 'closed') {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT']) && $request->status !== 'closed') {
              return response()->json(['message' => 'Unauthorized status change'], 403);
         }
 
-        $ticket->update([
+        // If support replies/updates, set is_admin_reply implicitly for next messages logic if needed,
+        // but here we just update ticket fields.
+        
+        $updateData = [
             'status' => $request->status ?? $ticket->status,
-            'priority' => ($user->role === 'ADMIN' && $request->priority) ? $request->priority : $ticket->priority,
-        ]);
+        ];
+
+        // Allow Admin/Support to update priority
+        if (in_array($user->role, ['ADMIN', 'SUPPORT']) && $request->priority) {
+            $updateData['priority'] = $request->priority;
+        }
+
+        $ticket->update($updateData);
 
         return response()->json($ticket);
     }

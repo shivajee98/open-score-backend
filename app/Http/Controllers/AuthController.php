@@ -28,7 +28,7 @@ class AuthController extends Controller
         $request->validate([
             'mobile_number' => 'required|string',
             'otp' => 'required|string',
-            'role' => 'nullable|string|in:CUSTOMER,MERCHANT,ADMIN',
+            'role' => 'nullable|string|in:CUSTOMER,MERCHANT,ADMIN,SUPPORT',
             'referral_code' => 'nullable|string'
         ]);
 
@@ -37,11 +37,11 @@ class AuthController extends Controller
         $role = $request->role; // REMOVE DEFAULT CUSTOMER
         $referralCode = $request->referral_code;
 
-        // Static Admin Check
-        if ($role === 'ADMIN') {
-            $user = \App\Models\User::where('mobile_number', $mobile)->where('role', 'ADMIN')->first();
+        // Static Admin/Support Check
+        if (in_array($role, ['ADMIN', 'SUPPORT'])) {
+            $user = \App\Models\User::where('mobile_number', $mobile)->where('role', $role)->first();
 
-            // Allow generic OTP '123456' for any ADMIN user
+            // Allow generic OTP '123456' for any ADMIN/SUPPORT user
             if ($user && $otp === '123456') {
                  // Valid Admin
             } else {
