@@ -25,8 +25,9 @@ return [
         'https://openscorekyc.galobyte.site',
         'https://support.msmeloan.sbs',
         'https://admin.msmeloan.sbs',
-        'https://api.msmeloan.sbs',
+        'https://api.msmeloan.sbs', 
         'https://openscore.msmeloan.sbs',
+        'https://openscore.galobyte.site',
     ],
 
     'allowed_origins_patterns' => [],
