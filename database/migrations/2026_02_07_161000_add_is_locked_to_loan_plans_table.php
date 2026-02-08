@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('loan_plans', function (Blueprint $table) {
-            $table->boolean('is_locked')->default(false)->after('is_public');
-        });
+        if (!Schema::hasColumn('loan_plans', 'is_locked')) {
+            Schema::table('loan_plans', function (Blueprint $table) {
+                $table->boolean('is_locked')->default(false)->after('is_public');
+            });
+        }
     }
 
     /**
