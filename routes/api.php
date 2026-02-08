@@ -219,9 +219,11 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     }
 
     try {
-        // Run the .sh script
-        $output = shell_exec('bash ' . base_path('migrate.sh') . ' 2>&1');
-        return response($output)->header('Content-Type', 'text/plain');
+        // Run migration directly via Artisan
+        $exitCode = Artisan::call('migrate', ['--force' => true]);
+        $output = Artisan::output();
+        
+        return response("Exit Code: $exitCode\nOutput:\n$output")->header('Content-Type', 'text/plain');
     } catch (\Exception $e) {
         return response($e->getMessage(), 500);
     }
