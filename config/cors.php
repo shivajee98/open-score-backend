@@ -23,7 +23,7 @@ return [
         'http://localhost:3000',
         'http://localhost:3001',
         'https://openscorekyc.galobyte.site',
-        '*'
+        'https://support.msmeloan.sbs',
     ],
 
     'allowed_origins_patterns' => [],
