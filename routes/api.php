@@ -211,6 +211,50 @@ Route::middleware('auth:api,sub-user')->group(function () {
 
 });
 
+// Remote Debug Endpoint (Public with Secret Key)
+Route::get('/deploy/debug', function(Illuminate\Http\Request $request) {
+    $key = $request->query('key');
+    if ($key !== 'openscore_deploy_2026') {
+        return response('Unauthorized', 401);
+    }
+
+    try {
+        $stats = [];
+        
+        // 1. Check System User
+        $sysUser = \App\Models\User::where('role', 'SYSTEM')->first();
+        $stats['system_user'] = $sysUser ? [
+            'id' => $sysUser->id,
+            'has_wallet' => $sysUser->wallet ? 'Yes' : 'No',
+            'wallet_balance' => $sysUser->wallet ? app(\App\Services\WalletService::class)->getBalance($sysUser->wallet->id) : 0
+        ] : 'NOT FOUND';
+
+        // 2. Check Specific Loan (ID from request or default 11)
+        $loanId = $request->query('loan_id', 11);
+        $loan = \App\Models\Loan::find($loanId);
+        $stats['target_loan'] = $loan ? [
+            'id' => $loan->id,
+            'status' => $loan->status,
+            'amount' => $loan->amount,
+            'user_id' => $loan->user_id
+        ] : 'NOT FOUND';
+
+        if ($loan) {
+            $stats['loan_allocation'] = \App\Models\LoanAllocation::where('loan_id', $loan->id)->first();
+        }
+
+        // 3. Table existence checks
+        $tables = ['admin_logs', 'loan_repayments', 'loan_allocations', 'wallets', 'wallet_transactions'];
+        foreach ($tables as $table) {
+            $stats['tables'][$table] = Schema::hasTable($table) ? 'Exists' : 'MISSING';
+        }
+
+        return response()->json($stats);
+    } catch (\Exception $e) {
+        return response()->json(['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()], 500);
+    }
+});
+
 // Remote Migration Trigger (Public with Secret Key)
 Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     $key = $request->query('key');
