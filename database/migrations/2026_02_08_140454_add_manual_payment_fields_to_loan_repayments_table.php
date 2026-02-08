@@ -12,9 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('loan_repayments', function (Blueprint $table) {
-            $table->string('proof_image')->nullable()->after('status');
-            $table->string('payment_mode')->default('WALLET')->after('status'); // WALLET, UPI_MANUAL
-            $table->text('admin_note')->nullable()->after('proof_image');
+            if (!Schema::hasColumn('loan_repayments', 'proof_image')) {
+                $table->string('proof_image')->nullable()->after('status');
+            }
+            if (!Schema::hasColumn('loan_repayments', 'payment_mode')) {
+                $table->string('payment_mode')->default('WALLET')->after('status'); // WALLET, UPI_MANUAL
+            }
+            if (!Schema::hasColumn('loan_repayments', 'admin_note')) {
+                $table->text('admin_note')->nullable()->after('proof_image');
+            }
         });
     }
 
