@@ -62,6 +62,14 @@ Route::middleware('auth:api,sub-user')->group(function () {
     Route::post('/admin/loans/repayments/{id}/approve', [LoanController::class, 'approveManualCollect']); // New
     Route::post('/admin/loans/{id}/close', [LoanController::class, 'closeManually']);
     Route::delete('/admin/loans/{id}', [LoanController::class, 'destroy']);
+    
+    // Manual Repayment (User)
+    Route::post('/loans/{id}/manual-repay', [LoanController::class, 'submitManualRepayment']);
+    
+    // Manual Repayment Verification (Admin/Support)
+    Route::get('/admin/repayments/pending', [LoanController::class, 'getPendingRepayments']);
+    Route::post('/admin/repayments/{id}/approve', [LoanController::class, 'approveManualRepayment']);
+    Route::post('/admin/repayments/{id}/reject', [LoanController::class, 'rejectManualRepayment']);
     Route::get('/admin/logs', [AdminController::class, 'getLogs']);
     Route::get('/logs', [AdminController::class, 'getLogs']); // Alias for frontend consistency 
     Route::get('/admin/payouts', [PaymentController::class, 'listWithdrawals']);

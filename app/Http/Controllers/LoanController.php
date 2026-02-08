@@ -1191,6 +1191,154 @@ class LoanController extends Controller
         return response()->json(['message' => 'Loan marked as CLOSED successfully']);
     }
 
+    /**
+     * User submits a manual repayment proof (screenshot)
+     */
+    public function submitManualRepayment(Request $request, $loan_id)
+    {
+        $request->validate([
+            'proof_image' => 'required|image|max:10240', // Max 10MB
+            'amount' => 'required|numeric|min:1'
+        ]);
+
+        $loan = Loan::findOrFail($loan_id);
+        if ($loan->user_id !== Auth::id()) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Find the oldest PENDING repayment
+        // We allow users to submit proof even if they are paying partial or multiple?
+        // For simplicity, we attach it to the next pending repayment.
+        $repayment = LoanRepayment::where('loan_id', $loan->id)
+            ->where('status', 'PENDING')
+            ->orderBy('due_date', 'asc')
+            ->first();
+
+        if (!$repayment) {
+             return response()->json(['error' => 'No pending EMIs found to pay against.'], 400);
+        }
+
+        if ($request->hasFile('proof_image')) {
+            $path = $request->file('proof_image')->store('repayments', 'public');
+            
+            // Generate a full URL for frontend/admin
+            // We'll store the relative path but return full URL
+            $repayment->proof_image = $path;
+        }
+
+        // If user says they paid X amount, should we update the repayment amount?
+        // Usually EMI amount is fixed. If they pay less, it's complex.
+        // We assume they pay the EMI amount. 
+        // We can store the user's claimed amount in notes or verified amount later.
+        
+        $repayment->payment_mode = 'UPI_MANUAL';
+        $repayment->status = 'PENDING_VERIFICATION';
+        $repayment->submitted_at = now(); // We might need to add this column or just use updated_at
+        $repayment->save();
+
+        return response()->json([
+            'message' => 'Payment proof submitted successfully. Waiting for verification.',
+            'repayment' => $repayment
+        ]);
+    }
+
+    /**
+     * Admin approves a manual repayment
+     */
+    public function approveManualRepayment(Request $request, $repaymentId)
+    {
+        // Check Admin/Support role
+        $user = Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $repayment = LoanRepayment::findOrFail($repaymentId);
+
+        if ($repayment->status !== 'PENDING_VERIFICATION') {
+            return response()->json(['error' => 'Repayment is not pending verification'], 400);
+        }
+
+        DB::transaction(function () use ($repayment, $user) {
+            $repayment->status = 'PAID';
+            $repayment->paid_at = now();
+            $repayment->collected_by = $user->id; // Verified by
+            $repayment->save();
+
+            $loan = Loan::findOrFail($repayment->loan_id);
+            $loan->increment('paid_amount', $repayment->amount);
+            
+            // Check loan closure
+            $pendingCount = LoanRepayment::where('loan_id', $loan->id)
+                ->where('status', '!=', 'PAID')
+                ->count();
+
+            if ($pendingCount === 0) {
+                $loan->status = 'CLOSED';
+                $loan->closed_at = now();
+                $loan->save();
+            }
+
+            // Log
+            DB::table('admin_logs')->insert([
+                'admin_id' => $user->id,
+                'action' => 'repayment_verified',
+                'description' => "Verified manual payment for Repayment ID: {$repayment->id}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        return response()->json($repayment);
+    }
+
+    /**
+     * Admin rejects a manual repayment
+     */
+    public function rejectManualRepayment(Request $request, $repaymentId)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate(['reason' => 'required|string']);
+
+        $repayment = LoanRepayment::findOrFail($repaymentId);
+
+        if ($repayment->status !== 'PENDING_VERIFICATION') {
+            return response()->json(['error' => 'Repayment is not pending verification'], 400);
+        }
+
+        $repayment->status = 'PENDING'; // Revert to pending so they can try again or pay via wallet
+        $repayment->admin_note = $request->reason;
+        $repayment->proof_image = null; // Clear image or keep it? Maybe clear it so they upload new.
+        // Actually keeping history might be better, but for simplicity let's reset for retry.
+        // If we want history, we should move the failed attempt to a log table.
+        // For now, let's keep it simple: Reset status, keep note.
+        $repayment->save();
+
+        return response()->json(['message' => 'Payment rejected', 'repayment' => $repayment]);
+    }
+
+    /**
+     * Get list of payments pending verification
+     */
+    public function getPendingRepayments(Request $request) 
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $repayments = LoanRepayment::with(['loan.user'])
+            ->where('status', 'PENDING_VERIFICATION')
+            ->orderBy('updated_at', 'desc')
+            ->paginate(50);
+
+        return response()->json($repayments);
+    }
+
     public function destroy($id)
     {
         if (Auth::user()->role !== 'ADMIN') {
