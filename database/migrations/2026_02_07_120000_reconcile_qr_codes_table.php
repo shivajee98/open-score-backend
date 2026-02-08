@@ -52,13 +52,30 @@ return new class extends Migration
         });
 
         // Separate closure for foreign key to ensure batch_id exists first
-        Schema::table('qr_codes', function (Blueprint $table) {
-            try {
-                // Check if the foreign key already exists to avoid errors
-                // We'll just try to add it, if it fails it's usually because it already exists
-                $table->foreign('batch_id')->references('id')->on('qr_batches')->onDelete('cascade');
-            } catch (\Exception $e) {}
-        });
+        // Check if the foreign key already exists to avoid Errno 121 "Duplicate key on write or update"
+        $foreignKeyExists = false;
+        try {
+            $results = DB::select("
+                SELECT CONSTRAINT_NAME 
+                FROM information_schema.KEY_COLUMN_USAGE 
+                WHERE TABLE_NAME = 'qr_codes' 
+                AND CONSTRAINT_NAME = 'qr_codes_batch_id_foreign'
+                AND TABLE_SCHEMA = DATABASE()
+            ");
+            $foreignKeyExists = count($results) > 0;
+        } catch (\Exception $e) {
+            // If we can't check, we'll try to add it and catch the error during execution
+        }
+
+        if (!$foreignKeyExists) {
+            Schema::table('qr_codes', function (Blueprint $table) {
+                try {
+                    $table->foreign('batch_id')->references('id')->on('qr_batches')->onDelete('cascade');
+                } catch (\Exception $e) {
+                    // Final fallback
+                }
+            });
+        }
     }
 
     /**
