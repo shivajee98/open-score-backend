@@ -282,6 +282,9 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     
     Artisan::call('config:clear');
     $output .= "Config Clear: " . Artisan::output() . "\n";
+
+    Artisan::call('storage:link');
+    $output .= "Storage Link: " . Artisan::output() . "\n";
     
     return response($output);
 });
