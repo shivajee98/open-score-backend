@@ -145,7 +145,8 @@ class LoanPlanController extends Controller
             'configurations.*.fees.*.amount' => 'required_with:configurations.*.fees|numeric',
             'configurations.*.cashback' => 'array', // Key: Freq, Value: Amount
             'plan_color' => 'required|string',
-            'is_locked' => 'nullable|boolean'
+            'is_locked' => 'nullable|boolean',
+            'tenure_type' => 'nullable|string|in:months,days,decimal'
         ]);
 
         $plan = LoanPlan::create($request->all());

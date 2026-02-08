@@ -18,6 +18,7 @@ class LoanPlan extends Model
         'is_active',
         'is_public',
         'is_locked',
+        'tenure_type',
     ];
 
     protected $casts = [
