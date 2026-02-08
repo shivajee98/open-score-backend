@@ -305,7 +305,8 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
 Route::get('/deploy/update-env', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
     
-    $output = shell_exec('bash ' . base_path('update_env.sh') . ' 2>&1');
+    $envPath = base_path('.env');
+    $output = shell_exec("bash " . base_path('update_env.sh') . " {$envPath} 2>&1");
     
     Artisan::call('config:clear');
     $output .= "\nConfig Clear: " . Artisan::output() . "\n";

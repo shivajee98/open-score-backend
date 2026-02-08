@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Script to update FCM environment variables on Hostinger
-ENV_FILE=".env"
+ENV_FILE="${1:-.env}"
 
 # Function to update or append a key-value pair
 update_key() {
