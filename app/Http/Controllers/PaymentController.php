@@ -10,6 +10,7 @@ use App\Models\Payment;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\FcmService;
 
 class PaymentController extends Controller
 {
@@ -165,6 +166,9 @@ class PaymentController extends Controller
                     );
                 }
                 // ---------------------------------
+
+                // Notify Receiver
+                FcmService::sendToUser($payeeUser, "Funds Received! 💰", "You have received ₹" . number_format($amount) . " from {$payer->name}.");
 
                 return response()->json(['message' => 'Transfer Successful', 'ref' => $ref, 'cashback' => $cashbackAmount]);
             } catch (\Exception $e) {
@@ -369,6 +373,10 @@ class PaymentController extends Controller
                 'updated_at' => now(),
             ]);
 
+            // Notify User
+            $user = User::find($withdraw->user_id);
+            FcmService::sendToUser($user, "Withdrawal Approved! 🏦", "Your withdrawal of ₹" . number_format($withdraw->amount) . " has been approved and processed.");
+
             return response()->json(['message' => 'Payout processed and marked as PAID']);
         });
     }
@@ -397,6 +405,11 @@ class PaymentController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // Notify User
+        $user = User::find($withdraw->user_id);
+        $reason = $request->admin_note ? " Reason: " . $request->admin_note : "";
+        FcmService::sendToUser($user, "Withdrawal Rejected ❌", "Your withdrawal request for ₹" . number_format($withdraw->amount) . " was rejected.{$reason}");
 
         return response()->json(['message' => 'Payout request rejected']);
     }

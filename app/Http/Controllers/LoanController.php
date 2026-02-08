@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Models\LoanRepayment;
 use Carbon\Carbon;
+use App\Services\FcmService;
 
 class LoanController extends Controller
 {
@@ -667,6 +668,10 @@ class LoanController extends Controller
             ]);
         });
 
+        // Notify User
+        $user = \App\Models\User::find($loan->user_id);
+        FcmService::sendToUser($user, "Loan Approved! 🎉", "Your loan request for ₹" . number_format($loan->amount) . " has been approved.");
+
         return response()->json($loan);
     }
 
@@ -780,6 +785,10 @@ class LoanController extends Controller
                 'updated_at' => now(),
             ]);
         });
+
+        // Notify User
+        $user = \App\Models\User::find($loan->user_id);
+        FcmService::sendToUser($user, "Loan Disbursed! 💸", "Your loan of ₹" . number_format($loan->amount) . " has been disbursed to your wallet.");
 
         return response()->json($loan);
     }
@@ -1290,6 +1299,11 @@ class LoanController extends Controller
             ]);
         });
 
+        // Notify User
+        $loan = Loan::find($repayment->loan_id);
+        $customer = \App\Models\User::find($loan->user_id);
+        FcmService::sendToUser($customer, "Payment Verified! ✅", "Your payment of ₹" . number_format($repayment->amount) . " has been verified and marked as paid.");
+
         return response()->json($repayment);
     }
 
@@ -1318,6 +1332,12 @@ class LoanController extends Controller
         // If we want history, we should move the failed attempt to a log table.
         // For now, let's keep it simple: Reset status, keep note.
         $repayment->save();
+
+        // Notify User
+        $loan = Loan::find($repayment->loan_id);
+        $customer = \App\Models\User::find($loan->user_id);
+        $reason = $request->reason ? " Reason: " . $request->reason : "";
+        FcmService::sendToUser($customer, "Payment Rejected ❌", "Your payment proof for ₹" . number_format($repayment->amount) . " was rejected.{$reason}");
 
         return response()->json(['message' => 'Payment rejected', 'repayment' => $repayment]);
     }

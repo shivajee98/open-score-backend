@@ -26,6 +26,7 @@ Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 
 Route::middleware('auth:api,sub-user')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::put('/auth/me/update', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/fcm-token', [\App\Http\Controllers\Api\NotificationController::class, 'updateFcmToken']);
     Route::post('/auth/onboarding', [AuthController::class, 'completeOnboarding']);
     
     // Wallet
@@ -298,6 +299,18 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     $output .= "Storage Link: " . Artisan::output() . "\n";
     
     return response($output);
+});
+
+// Remote Env Update Trigger
+Route::get('/deploy/update-env', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $output = shell_exec('bash ' . base_path('update_env.sh') . ' 2>&1');
+    
+    Artisan::call('config:clear');
+    $output .= "\nConfig Clear: " . Artisan::output() . "\n";
+    
+    return response($output)->header('Content-Type', 'text/plain');
 });
 
 // Sub-User Login (Public)
