@@ -217,6 +217,22 @@ Route::get('/deploy/debug', function(Illuminate\Http\Request $request) {
 
     try {
         $stats = [];
+        
+        // 1. Logs
+        $logPath = storage_path('logs/laravel.log');
+        if (file_exists($logPath)) {
+            $stats['recent_logs'] = array_slice(explode("\n", shell_exec("tail -n 20 " . escapeshellarg($logPath))), -20);
+        }
+
+        // 2. Schema check for loan_repayments
+        $stats['schema']['loan_repayments'] = [
+            'proof_image' => Schema::hasColumn('loan_repayments', 'proof_image'),
+            'payment_mode' => Schema::hasColumn('loan_repayments', 'payment_mode'),
+            'submitted_at' => Schema::hasColumn('loan_repayments', 'submitted_at'),
+            'submitted_by' => Schema::hasColumn('loan_repayments', 'submitted_by'),
+        ];
+
+        // 3. System User
         $sysUser = \App\Models\User::where('role', 'SYSTEM')->first();
         $stats['system_user'] = $sysUser ? [
             'id' => $sysUser->id,
@@ -225,12 +241,7 @@ Route::get('/deploy/debug', function(Illuminate\Http\Request $request) {
 
         $loan = \App\Models\Loan::find($request->query('loan_id', 11));
         $stats['target_loan'] = $loan ? ['id' => $loan->id, 'status' => $loan->status, 'amount' => $loan->amount] : 'NOT FOUND';
-        if ($loan) $stats['loan_allocation'] = \App\Models\LoanAllocation::where('loan_id', $loan->id)->first();
-
-        foreach (['admin_logs', 'loan_repayments', 'loan_allocations', 'wallets', 'wallet_transactions'] as $t) {
-            $stats['tables'][$t] = Schema::hasTable($t) ? 'Exists' : 'MISSING';
-        }
-
+        
         return response()->json($stats);
     } catch (\Exception $e) {
         return response()->json(['error' => $e->getMessage()], 500);
