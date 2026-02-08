@@ -22,12 +22,12 @@ Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
 Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
 Route::get('/merchants/nearby', [\App\Http\Controllers\MerchantController::class, 'nearby']);
 Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 'show']);
+Route::post('/auth/test-push', [\App\Http\Controllers\Api\NotificationController::class, 'sendTestNotification']);
 
 Route::middleware('auth:api,sub-user')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::put('/auth/me/update', [AuthController::class, 'updateProfile']);
     Route::post('/auth/fcm-token', [\App\Http\Controllers\Api\NotificationController::class, 'updateFcmToken']);
-    Route::post('/auth/test-push', [\App\Http\Controllers\Api\NotificationController::class, 'sendTestNotification']);
     Route::post('/auth/onboarding', [AuthController::class, 'completeOnboarding']);
     
     // Wallet
