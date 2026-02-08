@@ -1233,7 +1233,8 @@ class LoanController extends Controller
         
         $repayment->payment_mode = 'UPI_MANUAL';
         $repayment->status = 'PENDING_VERIFICATION';
-        $repayment->submitted_at = now(); // We might need to add this column or just use updated_at
+        $repayment->submitted_at = now();
+        $repayment->submitted_by = Auth::id();
         $repayment->save();
 
         return response()->json([
