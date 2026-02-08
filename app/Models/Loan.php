@@ -117,6 +117,17 @@ class Loan extends Model
         
         $netPayableByCustomer = $amount + $totalFees + $gst + $totalInterest;
 
+        // Extract raw fees for dynamic display
+        $feeStructure = [];
+        if ($plan && isset($config['fees']) && is_array($config['fees'])) {
+            foreach ($config['fees'] as $fee) {
+                $feeStructure[] = [
+                    'name' => $fee['name'] ?? 'Fee',
+                    'amount' => (float)($fee['amount'] ?? 0)
+                ];
+            }
+        }
+
         // CRITICAL FIX: If repayments are already generated, use their sum as the Source of Truth.
         // This prevents negative outstanding issues when plan data is missing or changed.
         if ($this->repayments()->exists()) {
@@ -134,6 +145,7 @@ class Loan extends Model
             'login_fee' => $loginFee,
             'field_kyc_fee' => $fieldKycFee,
             'other_fees' => $otherFees,
+            'fee_structure' => $feeStructure, // NEW: Full dynamic structure
             'interest_rate' => $interestRate,
             'total_interest' => $totalInterest,
             'total_deductions' => $totalFees + $gst, // Fees + GST for display
