@@ -213,64 +213,66 @@ Route::middleware('auth:api,sub-user')->group(function () {
 
 // Remote Debug Endpoint (Public with Secret Key)
 Route::get('/deploy/debug', function(Illuminate\Http\Request $request) {
-    $key = $request->query('key');
-    if ($key !== 'openscore_deploy_2026') {
-        return response('Unauthorized', 401);
-    }
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
 
     try {
         $stats = [];
-        
-        // 1. Check System User
         $sysUser = \App\Models\User::where('role', 'SYSTEM')->first();
         $stats['system_user'] = $sysUser ? [
             'id' => $sysUser->id,
-            'has_wallet' => $sysUser->wallet ? 'Yes' : 'No',
             'wallet_balance' => $sysUser->wallet ? app(\App\Services\WalletService::class)->getBalance($sysUser->wallet->id) : 0
         ] : 'NOT FOUND';
 
-        // 2. Check Specific Loan (ID from request or default 11)
-        $loanId = $request->query('loan_id', 11);
-        $loan = \App\Models\Loan::find($loanId);
-        $stats['target_loan'] = $loan ? [
-            'id' => $loan->id,
-            'status' => $loan->status,
-            'amount' => $loan->amount,
-            'user_id' => $loan->user_id
-        ] : 'NOT FOUND';
+        $loan = \App\Models\Loan::find($request->query('loan_id', 11));
+        $stats['target_loan'] = $loan ? ['id' => $loan->id, 'status' => $loan->status, 'amount' => $loan->amount] : 'NOT FOUND';
+        if ($loan) $stats['loan_allocation'] = \App\Models\LoanAllocation::where('loan_id', $loan->id)->first();
 
-        if ($loan) {
-            $stats['loan_allocation'] = \App\Models\LoanAllocation::where('loan_id', $loan->id)->first();
-        }
-
-        // 3. Table existence checks
-        $tables = ['admin_logs', 'loan_repayments', 'loan_allocations', 'wallets', 'wallet_transactions'];
-        foreach ($tables as $table) {
-            $stats['tables'][$table] = Schema::hasTable($table) ? 'Exists' : 'MISSING';
+        foreach (['admin_logs', 'loan_repayments', 'loan_allocations', 'wallets', 'wallet_transactions'] as $t) {
+            $stats['tables'][$t] = Schema::hasTable($t) ? 'Exists' : 'MISSING';
         }
 
         return response()->json($stats);
     } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()], 500);
+        return response()->json(['error' => $e->getMessage()], 500);
     }
 });
 
-// Remote Migration Trigger (Public with Secret Key)
-Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
-    $key = $request->query('key');
-    if ($key !== 'openscore_deploy_2026') {
-        return response('Unauthorized', 401);
-    }
+// Remote System Setup (Create SYSTEM user and add float)
+Route::get('/deploy/setup-system', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
 
     try {
-        // Run migration directly via Artisan
-        $exitCode = Artisan::call('migrate', ['--force' => true]);
-        $output = Artisan::output();
-        
-        return response("Exit Code: $exitCode\nOutput:\n$output")->header('Content-Type', 'text/plain');
+        $user = \App\Models\User::firstOrCreate(
+            ['email' => 'system@openscore.com'],
+            [
+                'name' => 'System Treasury',
+                'mobile_number' => '0000000000',
+                'role' => 'SYSTEM',
+                'status' => 'ACTIVE',
+                'is_onboarded' => true,
+                'password' => bcrypt('system_secure_password_2026'),
+            ]
+        );
+
+        $walletService = app(\App\Services\WalletService::class);
+        $wallet = $user->wallet ?: $walletService->createWallet($user->id);
+
+        $balance = $walletService->getBalance($wallet->id);
+        if ($balance < 1000000) {
+            $walletService->credit($wallet->id, 1000000, 'SYSTEM_DEPOSIT', 0, 'Initial System Float');
+        }
+
+        return response("System Setup Complete. Balance: " . $walletService->getBalance($wallet->id));
     } catch (\Exception $e) {
         return response($e->getMessage(), 500);
     }
+});
+
+// Remote Migration Trigger
+Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    Artisan::call('migrate', ['--force' => true]);
+    return response(Artisan::output());
 });
 
 // Sub-User Login (Public)
