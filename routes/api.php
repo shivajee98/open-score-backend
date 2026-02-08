@@ -208,6 +208,23 @@ Route::middleware('auth:api,sub-user')->group(function () {
             return response($e->getMessage(), 500);
         }
     });
+
+});
+
+// Remote Migration Trigger (Public with Secret Key)
+Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
+    $key = $request->query('key');
+    if ($key !== 'openscore_deploy_2026') {
+        return response('Unauthorized', 401);
+    }
+
+    try {
+        // Run the .sh script
+        $output = shell_exec('bash ' . base_path('migrate.sh') . ' 2>&1');
+        return response($output)->header('Content-Type', 'text/plain');
+    } catch (\Exception $e) {
+        return response($e->getMessage(), 500);
+    }
 });
 
 // Sub-User Login (Public)
