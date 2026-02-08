@@ -271,8 +271,19 @@ Route::get('/deploy/setup-system', function(Illuminate\Http\Request $request) {
 // Remote Migration Trigger
 Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $output = "";
+    
     Artisan::call('migrate', ['--force' => true]);
-    return response(Artisan::output());
+    $output .= "Migrate: " . Artisan::output() . "\n";
+    
+    Artisan::call('route:clear');
+    $output .= "Route Clear: " . Artisan::output() . "\n";
+    
+    Artisan::call('config:clear');
+    $output .= "Config Clear: " . Artisan::output() . "\n";
+    
+    return response($output);
 });
 
 // Sub-User Login (Public)
