@@ -62,7 +62,9 @@ class AuthController extends Controller
              // Normal User OTP Bypass (Demo)
              $user = \App\Models\User::where('mobile_number', $mobile)->first();
              
-             if (!$user) {
+             $isNewUserSignup = !$user || (!$user->is_onboarded && !$user->referredBy()->exists());
+
+             if (!$user || $isNewUserSignup) {
                  if (!$role) {
                      return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
                  }
@@ -117,19 +119,18 @@ class AuthController extends Controller
                       }
                   }
 
-                  \Log::info("Creating new user: {$mobile} with role: {$role} and referral: {$referralCode}");
-
-                  // Create new user (Customer/Merchant)
-                  $user = \App\Models\User::create([
-                      'mobile_number' => $mobile,
-                      'role' => $role,
-                      'status' => 'ACTIVE',
-                      'is_onboarded' => false,
-                      'password' => bcrypt('password'),
-                      'referral_campaign_id' => $referralCampaignId,
-                      'sub_user_id' => $subUserId,
-                      'my_referral_code' => strtoupper(\Illuminate\Support\Str::random(8))
-                  ]);
+                   // Get or Create
+                   $user = \App\Models\User::where('mobile_number', $mobile)->first() ?: new \App\Models\User(['mobile_number' => $mobile]);
+                   $user->role = $role;
+                   $user->status = 'ACTIVE';
+                   $user->is_onboarded = false;
+                   $user->password = bcrypt('password');
+                   $user->referral_campaign_id = $referralCampaignId;
+                   $user->sub_user_id = $subUserId;
+                   if (empty($user->my_referral_code)) {
+                       $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
+                   }
+                   $user->save();
 
                   \Log::info("User created with ID: {$user->id}, is_onboarded: " . ($user->is_onboarded ? 'true' : 'false'));
 
