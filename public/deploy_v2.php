@@ -38,7 +38,23 @@ function deploy_app($zipName, $targetDir) {
         echo "<p style='color:green'>✅ Restored $targetDir</p>";
     } else {
         echo "<p style='color:red'>❌ Failed to unzip $zipName</p>";
+        return;
     }
+
+    // Create .htaccess for SPA routing
+    $htaccess = <<<HTACCESS
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-l
+  RewriteRule . /index.html [L]
+</IfModule>
+HTACCESS;
+    file_put_contents("$targetDir/.htaccess", $htaccess);
+    echo "<p>📄 Created .htaccess in $targetDir</p>";
 }
 
 // 2. Deploy Customer App (Root Domain or Subdomain?)
