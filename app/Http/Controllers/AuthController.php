@@ -37,12 +37,16 @@ class AuthController extends Controller
         $role = $request->role; // REMOVE DEFAULT CUSTOMER
         $referralCode = $request->referral_code;
         
+        \Log::info("Verify OTP Entry - Mobile: {$mobile}, Role: {$role}, Ref: {$referralCode}");
+
         // Normalize referral code
-        if ($referralCode === 'null' || $referralCode === 'undefined' || empty(trim($referralCode))) {
+        if ($referralCode === 'null' || $referralCode === 'undefined' || !is_string($referralCode) || empty(trim($referralCode))) {
             $referralCode = null;
         } else {
             $referralCode = strtoupper(trim($referralCode));
         }
+        
+        \Log::info("Normalized Ref: " . ($referralCode ?? 'NONE'));
 
         // Static Admin/Support Check
         if (in_array($role, ['ADMIN', 'SUPPORT'])) {
