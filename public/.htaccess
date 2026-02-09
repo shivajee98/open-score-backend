@@ -5,6 +5,13 @@
 
     RewriteEngine On
 
+    # Admin Panel Rewrite
+    RewriteRule ^admin/(.*)$ admin/$1 [L]
+    RewriteCond %{REQUEST_URI} ^/admin
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^admin/(.*)$ admin/index.html [L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
