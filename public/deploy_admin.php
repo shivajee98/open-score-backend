@@ -23,7 +23,25 @@ if (!is_dir($extractPath)) {
 
 $zip = new ZipArchive;
 if ($zip->open($zipFile) === TRUE) {
-    // Clear existing files? Ideally yes, but let's just overwrite for now.
+    // Clear existing files? Ideally yes.
+    $files = glob($extractPath . '/*'); 
+    foreach($files as $file){
+        if(is_file($file)) {
+            unlink($file);
+        } elseif(is_dir($file)) {
+            // Simple recursive delete for subfolders
+            $it = new RecursiveDirectoryIterator($file, RecursiveDirectoryIterator::SKIP_DOTS);
+            $files_sub = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
+            foreach($files_sub as $f) {
+                if ($f->isDir()){
+                    rmdir($f->getRealPath());
+                } else {
+                    unlink($f->getRealPath());
+                }
+            }
+            rmdir($file);
+        }
+    }
     
     $zip->extractTo($extractPath);
     $zip->close();
