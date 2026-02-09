@@ -542,7 +542,7 @@ class LoanController extends Controller
 
         return response()->json([
             'loan' => $loan,
-            'kyc_link' => env('KYC_FORM_URL', 'https://openscorekyc.galobyte.site') . "/form/{$loan->kyc_token}"
+            'kyc_link' => env('KYC_FORM_URL', 'https://api.msmeloan.sbs/kyc') . "/form?token={$loan->kyc_token}"
         ]);
     }
 

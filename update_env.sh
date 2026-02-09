@@ -31,4 +31,7 @@ update_key "FCM_SERVER_KEY" "AIzaSyAl2w3JHMEBG7lDH7GdyaAFvqMCFdahEgs"
 update_key "FCM_SENDER_ID" "484983197738"
 update_key "FCM_VAPID_PUBLIC_KEY" "BHvmCGQ_Ro9oPKZ7VZTf9TEP9Q_ZaPMcF0U-kvKiufXRbVMp-DuqIvnP8Q9BMGHRT03NJNi2w0Qlpo9OTMj5xVQ"
 
-echo "FCM Environment variables update complete."
+# KYC URL Update
+update_key "KYC_FORM_URL" "https://api.msmeloan.sbs/kyc"
+
+echo "Environment variables update complete."
