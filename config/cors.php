@@ -23,6 +23,7 @@ return [
         'http://localhost:3000',
         'http://localhost:3001',
         'https://support.msmeloan.sbs',
+        'https://kyc.msmeloan.sbs',
         'https://admin.msmeloan.sbs',
         'https://api.msmeloan.sbs', 
         'https://openscore.msmeloan.sbs',
