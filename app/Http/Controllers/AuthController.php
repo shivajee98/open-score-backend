@@ -36,6 +36,13 @@ class AuthController extends Controller
         $otp = $request->otp;
         $role = $request->role; // REMOVE DEFAULT CUSTOMER
         $referralCode = $request->referral_code;
+        
+        // Normalize referral code
+        if ($referralCode === 'null' || $referralCode === 'undefined' || empty(trim($referralCode))) {
+            $referralCode = null;
+        } else {
+            $referralCode = strtoupper(trim($referralCode));
+        }
 
         // Static Admin/Support Check
         if (in_array($role, ['ADMIN', 'SUPPORT'])) {
@@ -64,9 +71,9 @@ class AuthController extends Controller
                   
                   if ($referralCode) {
                      // First priority: Check if it's a user's personal referral code
-                     $referrer = \App\Models\User::where('my_referral_code', strtoupper($referralCode))->first();
-                     
-                     if ($referrer) {
+                     $referrer = \App\Models\User::where('my_referral_code', $referralCode)->first();
+                                          if ($referrer) {
+                         \Log::info("Found personal referrer: {$referrer->id} for code: {$referralCode}");
                          // This is a personal referral - will create UserReferral record after user creation
                          $referrerId = $referrer->id;
                          
@@ -76,6 +83,7 @@ class AuthController extends Controller
                              $cashbackAmount = $referralSettings->signup_bonus;
                          }
                      } else {
+                         \Log::info("No personal referrer found for code: {$referralCode}. Checking sub-users...");
                          // Check if it's a sub-user referral code
                          $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
                              ->where('is_active', true)

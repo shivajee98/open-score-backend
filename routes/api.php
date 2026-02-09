@@ -392,6 +392,23 @@ Route::get('/deploy/query', function(Illuminate\Http\Request $request) {
     }
 });
 
+Route::get('/deploy/reset-test-user', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    $mobile = $request->query('mobile', '7777777777');
+    
+    $user = \App\Models\User::where('mobile_number', $mobile)->first();
+    if ($user) {
+        $id = $user->id;
+        // Delete related records
+        \App\Models\Wallet::where('user_id', $id)->delete();
+        \App\Models\UserReferral::where('referred_id', $id)->delete();
+        \App\Models\Loan::where('user_id', $id)->delete(); // Careful
+        $user->delete();
+        return response("User {$mobile} deleted.");
+    }
+    return response("User {$mobile} not found.");
+});
+
 // Remote file writer for testing
 Route::match(['get', 'post'], '/deploy/write-test', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026' && $request->input('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
