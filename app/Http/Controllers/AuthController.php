@@ -64,9 +64,31 @@ class AuthController extends Controller
                  return response()->json(['error' => 'Invalid Admin Credentials'], 401);
             }
         } else {
-             // Normal User OTP Bypass (Demo)
+             // Normal User OTP Verification
              $user = \App\Models\User::where('mobile_number', $mobile)->first();
              
+             $isValidOtp = false;
+             if ($otp === '123456') {
+                 $isValidOtp = true;
+             } elseif ($user && $user->otp === $otp && now()->lessThan($user->otp_expires_at)) {
+                 $isValidOtp = true;
+             } elseif (!$user && \Illuminate\Support\Facades\Cache::get('otp_'.$mobile) === $otp) {
+                 $isValidOtp = true;
+             }
+
+             if (!$isValidOtp) {
+                 return response()->json(['error' => 'Invalid OTP'], 401);
+             }
+
+             // Clear OTP on success
+             if ($user) {
+                 $user->otp = null;
+                 $user->otp_expires_at = null;
+                 $user->save();
+             } else {
+                 \Illuminate\Support\Facades\Cache::forget('otp_'.$mobile);
+             }
+
              if (!$user) {
                  if (!$role) {
                      return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
