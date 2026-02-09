@@ -208,6 +208,24 @@ class WalletService
         return $systemUser->wallet;
     }
 
+    /**
+     * System Debit - Does NOT check balance (System has unlimited funds)
+     */
+    public function systemDebit(int $walletId, float $amount, string $sourceType, int $sourceId, ?string $description = null): WalletTransaction
+    {
+        return DB::transaction(function () use ($walletId, $amount, $sourceType, $sourceId, $description) {
+            return WalletTransaction::create([
+                'wallet_id' => $walletId,
+                'type' => 'DEBIT',
+                'amount' => $amount,
+                'status' => 'COMPLETED',
+                'source_type' => $sourceType,
+                'source_id' => $sourceId,
+                'description' => $description
+            ]);
+        });
+    }
+
     // Transfer from System to User (Cashback, Bonuses, Loan Disbursal)
     // OR User to System (Repayments) - direction controlled by $direction
     // direction: 'OUT' (System -> User), 'IN' (User -> System)
@@ -222,22 +240,22 @@ class WalletService
             $txs = [];
 
             if ($direction === 'OUT') {
-                // System Debit
-                $this->debit(
+                // System Debit - Use systemDebit (no balance check for system wallet)
+                $this->systemDebit(
                     $systemWallet->id, 
                     $amount, 
                     $type, 
                     $userWallet->id, 
-                    "System Transfer to User: {$description}" // Description for System View
+                    "System Transfer to User: {$description}"
                 );
                 
                 // User Credit
                 $txs['credit'] = $this->credit(
                     $userWallet->id,
                     $amount,
-                    $type, // Keep original type like 'CASHBACK', 'LOAN_DISBURSAL'
+                    $type,
                     $systemWallet->id,
-                    $description // Description for User View
+                    $description
                 );
             } else {
                 // User Debit
