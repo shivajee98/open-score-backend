@@ -144,12 +144,14 @@ class AuthController extends Controller
                       $signupBonus = $referralSettings ? $referralSettings->signup_bonus : 100;
                       
                       try {
+                          
                           \App\Models\UserReferral::create([
                               'referrer_id' => $referrerId,
                               'referred_id' => $user->id,
                               'referral_code' => strtoupper($referralCode),
                               'signup_bonus_earned' => $signupBonus,
-                              'signup_bonus_paid' => false
+                              'signup_bonus_paid' => true,
+                              'signup_bonus_paid_at' => now()
                           ]);
                           
                           // Credit signup bonus to referrer from System Wallet
@@ -160,12 +162,6 @@ class AuthController extends Controller
                               "Referral bonus for {$user->mobile_number} signup",
                               'OUT'
                           );
-                          
-                          // Mark as paid
-                          \App\Models\UserReferral::where('referred_id', $user->id)->update([
-                              'signup_bonus_paid' => true,
-                              'signup_bonus_paid_at' => now()
-                          ]);
                           \Log::info("Referral bonus of {$signupBonus} sent to referrer: {$referrerId}");
                       } catch (\Exception $e) {
                           \Log::error("Failed to process referral bonus: " . $e->getMessage());
