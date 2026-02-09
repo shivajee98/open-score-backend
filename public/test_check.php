@@ -23,10 +23,8 @@ if ($user) {
 }
 
 $settings = ReferralSetting::first();
-echo "\nReferral Settings:\n";
-if ($settings) {
-    echo "Enabled: " . ($settings->is_enabled ? 'Yes' : 'No') . "\n";
-    echo "Signup Bonus: {$settings->signup_bonus}\n";
-} else {
-    echo "No Referral Settings found!\n";
+echo "\nRecent Referrals:\n";
+$referrals = \App\Models\UserReferral::with(['referrer', 'referredUser'])->latest()->take(5)->get();
+foreach ($referrals as $ref) {
+    echo "- Referrer: {$ref->referrer->name} (ID: {$ref->referrer_id}) -> Referred: {$ref->referredUser->name} (ID: {$ref->referred_id}) | Bonus: {$ref->signup_bonus_earned} | Paid: " . ($ref->signup_bonus_paid ? 'Yes' : 'No') . "\n";
 }
