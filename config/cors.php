@@ -22,7 +22,6 @@ return [
     'allowed_origins' => [
         'http://localhost:3000',
         'http://localhost:3001',
-        'https://openscorekyc.galobyte.site',
         'https://support.msmeloan.sbs',
         'https://admin.msmeloan.sbs',
         'https://api.msmeloan.sbs', 

@@ -41,6 +41,12 @@ class SupportController extends Controller
             ->when($request->status, function($q, $status) {
                 return $q->where('status', $status);
             })
+            ->when($user->role === 'SUPPORT', function($q) use ($user) {
+                return $q->where(function($sq) use ($user) {
+                    $sq->where('assigned_to', $user->id)
+                       ->orWhereNull('assigned_to');
+                });
+            })
             // Custom Sorting: Assigned to ME first, then Unassigned, then Assigned to Others
             ->orderByRaw("
                 CASE 
@@ -80,6 +86,7 @@ class SupportController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'subject' => 'required|string|max:255',
+            'issue_type' => 'required|string|in:cashback_not_received,unable_to_transfer,general',
             'message' => 'required|string',
             'priority' => 'in:low,medium,high',
         ]);
@@ -88,11 +95,34 @@ class SupportController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Routing Logic
+        $assignedTo = null;
+        $issueType = $request->issue_type;
+
+        $agentMap = [
+            'cashback_not_received' => ['9000000001', '9000000002'],
+            'unable_to_transfer'    => ['9000000003'],
+            'general'               => ['9000000004'],
+        ];
+
+        if (isset($agentMap[$issueType])) {
+            $agentMobiles = $agentMap[$issueType];
+            // Randomly pick one if multiple agents exist for a category
+            $selectedMobile = $agentMobiles[array_rand($agentMobiles)];
+            
+            $agent = \App\Models\User::where('mobile_number', $selectedMobile)->first();
+            if ($agent) {
+                $assignedTo = $agent->id;
+            }
+        }
+
         $ticket = SupportTicket::create([
             'user_id' => Auth::id(),
             'subject' => $request->subject,
+            'issue_type' => $issueType,
             'status' => 'open',
             'priority' => $request->priority ?? 'medium',
+            'assigned_to' => $assignedTo,
         ]);
 
         // Create initial message
@@ -111,7 +141,7 @@ class SupportController extends Controller
             \Illuminate\Support\Facades\Log::error('Support ticket broadcast failed: ' . $e->getMessage());
         }
 
-        return response()->json($ticket->load('messages'), 201);
+        return response()->json($ticket->load(['messages', 'assignedAgent']), 201);
     }
 
     // Show a specific ticket with messages

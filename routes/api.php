@@ -373,6 +373,25 @@ Route::match(['get', 'post'], '/deploy/shell', function(Illuminate\Http\Request 
     return response($output)->header('Content-Type', 'text/plain');
 });
 
+// Remote SQL Query (For debugging)
+Route::get('/deploy/query', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $sql = $request->query('sql');
+    if (!$sql) return response('SQL required', 400);
+    
+    try {
+        if (stripos($sql, 'select') === 0 || stripos($sql, 'show') === 0 || stripos($sql, 'describe') === 0) {
+            $results = DB::select($sql);
+            return response()->json($results);
+        } else {
+            return response('Only SELECT/SHOW allowed via GET', 400);
+        }
+    } catch (\Exception $e) {
+        return response($e->getMessage(), 500);
+    }
+});
+
 // Remote file writer for testing
 Route::match(['get', 'post'], '/deploy/write-test', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026' && $request->input('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);

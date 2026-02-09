@@ -105,6 +105,8 @@ class AuthController extends Controller
                       }
                   }
 
+                  \Log::info("Creating new user: {$mobile} with role: {$role} and referral: {$referralCode}");
+
                   // Create new user (Customer/Merchant)
                   $user = \App\Models\User::create([
                       'mobile_number' => $mobile,
@@ -117,23 +119,26 @@ class AuthController extends Controller
                       'my_referral_code' => strtoupper(\Illuminate\Support\Str::random(8))
                   ]);
 
+                  \Log::info("User created with ID: {$user->id}, is_onboarded: " . ($user->is_onboarded ? 'true' : 'false'));
+
                   // Create Wallet for new user
                   $walletService = app(\App\Services\WalletService::class);
                   $walletService->createWallet($user->id);
 
                   // Handle personal referral - Create UserReferral record
                   if ($referrerId) {
+                      \Log::info("Processing personal referral from: {$referrerId}");
                       $referralSettings = \App\Models\ReferralSetting::first();
                       $signupBonus = $referralSettings ? $referralSettings->signup_bonus : 100;
                       
-                      \App\Models\UserReferral::create([
-                          'referrer_id' => $referrerId,
-                          'referred_id' => $user->id,
-                          'referral_code' => strtoupper($referralCode),
-                          'signup_bonus_earned' => $signupBonus,
-                          'signup_bonus_paid' => false
-                      ]);
-                      
+                      try {
+                          \App\Models\UserReferral::create([
+                              'referrer_id' => $referrerId,
+                              'referred_id' => $user->id,
+                              'referral_code' => strtoupper($referralCode),
+                              'signup_bonus_earned' => $signupBonus,
+                              'signup_bonus_paid' => false
+                          ]);
                           
                           // Credit signup bonus to referrer from System Wallet
                           $walletService->transferSystemFunds(
@@ -149,36 +154,45 @@ class AuthController extends Controller
                               'signup_bonus_paid' => true,
                               'signup_bonus_paid_at' => now()
                           ]);
-                      
+                          \Log::info("Referral bonus of {$signupBonus} sent to referrer: {$referrerId}");
+                      } catch (\Exception $e) {
+                          \Log::error("Failed to process referral bonus: " . $e->getMessage());
+                      }
                   }
 
                   // Credit Referral/Signup Bonus to new user
                   if ($cashbackAmount > 0) {
+                      \Log::info("Crediting welcome bonus: {$cashbackAmount} to new user: {$user->id}");
                       $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
                       
-                      // If sub-user referral, deduct from sub-user credit
-                      if ($subUserId && isset($subUser)) {
-                          if ($subUser->credit_balance >= $cashbackAmount) {
-                              $subUser->credit_balance -= $cashbackAmount;
-                              $subUser->save();
-                              
-                              $walletService->credit(
-                                  $wallet->id,
-                                  $cashbackAmount,
-                                  'SUB_USER_REFERRAL_BONUS',
+                      try {
+                          // If sub-user referral, deduct from sub-user credit
+                          if ($subUserId && isset($subUser)) {
+                              if ($subUser->credit_balance >= $cashbackAmount) {
+                                  $subUser->credit_balance -= $cashbackAmount;
+                                  $subUser->save();
+                                  
+                                  $walletService->credit(
+                                      $wallet->id,
+                                      $cashbackAmount,
+                                      'SUB_USER_REFERRAL_BONUS',
+                                      $user->id,
+                                      "Welcome Bonus from sub-user: {$subUser->name}"
+                                  );
+                              }
+                          } else {
+                              // Standard bonus from System Wallet
+                              $walletService->transferSystemFunds(
                                   $user->id,
-                                  "Welcome Bonus from sub-user: {$subUser->name}"
+                                  $cashbackAmount,
+                                  $referralCampaignId ? 'REFERRAL_BONUS' : ($referrerId ? 'REFERRAL_WELCOME_BONUS' : 'SIGNUP_BONUS'),
+                                  $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus'),
+                                  'OUT'
                               );
                           }
-                      } else {
-                          // Standard bonus from System Wallet
-                          $walletService->transferSystemFunds(
-                              $user->id,
-                              $cashbackAmount,
-                              $referralCampaignId ? 'REFERRAL_BONUS' : ($referrerId ? 'REFERRAL_WELCOME_BONUS' : 'SIGNUP_BONUS'),
-                              $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus'),
-                              'OUT'
-                          );
+                          \Log::info("Welcome bonus credited successfully.");
+                      } catch (\Exception $e) {
+                          \Log::error("Failed to credit welcome bonus: " . $e->getMessage());
                       }
                   }
 

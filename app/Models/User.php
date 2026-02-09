@@ -63,6 +63,7 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'otp_expires_at' => 'datetime',
+            'is_onboarded' => 'boolean',
             'shop_images' => 'array',
         ];
     }
