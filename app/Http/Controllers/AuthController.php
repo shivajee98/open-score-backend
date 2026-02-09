@@ -37,6 +37,11 @@ class AuthController extends Controller
         $role = $request->role; // REMOVE DEFAULT CUSTOMER
         $referralCode = $request->referral_code;
         
+        $referrerId = null;
+        $subUserId = null;
+        $cashbackAmount = 0;
+        $referralCampaignId = null;
+        
         \Log::info("Verify OTP Entry - Mobile: {$mobile}, Role: {$role}, Ref: {$referralCode}");
 
         // Normalize referral code
@@ -68,11 +73,7 @@ class AuthController extends Controller
                  }
                                   
                   // Handle Referral Logic for New User
-                  $referralCampaignId = null;
-                  $subUserId = null;
-                  $cashbackAmount = 0;
-                  $referrerId = null; // Track who referred this user
-                  
+                   
                   if ($referralCode) {
                      // First priority: Check if it's a user's personal referral code
                      $referrer = \App\Models\User::where('my_referral_code', $referralCode)->first();
@@ -247,7 +248,14 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type' => 'bearer',
             'user' => $user,
-            'onboarding_status' => $user->is_onboarded ? 'COMPLETED' : 'REQUIRED'
+            'onboarding_status' => $user->is_onboarded ? 'COMPLETED' : 'REQUIRED',
+            'debug_info' => [
+                'referral_code' => $referralCode ?? null,
+                'referrer_id' => $referrerId ?? null,
+                'cashback_amount' => $cashbackAmount ?? 0,
+                'sub_user_id' => $subUserId ?? null,
+                'role' => $user->role
+            ]
         ]);
     }
 
