@@ -12,21 +12,21 @@ class AuthService
 {
     public function requestOtp(string $mobile): string
     {
-        // 1. Find User
-        $user = User::where('mobile_number', $mobile)->first();
+        // 1. Find or Create User
+        // Default role is CUSTOMER.
+        // If updating an existing user, we just update OTP.
+        $user = User::firstOrCreate(
+            ['mobile_number' => $mobile],
+            ['role' => 'CUSTOMER']
+        );
         
         // 2. Generate OTP
         $otp = (string) rand(100000, 999999);
         
-        if ($user) {
-            // 3. Save to user if exists
-            $user->otp = $otp; 
-            $user->otp_expires_at = Carbon::now()->addMinutes(10);
-            $user->save();
-        } else {
-            // 3b. Store in Cache for new users
-            \Illuminate\Support\Facades\Cache::put('otp_'.$mobile, $otp, now()->addMinutes(10));
-        }
+        // 3. Save to user
+        $user->otp = $otp; 
+        $user->otp_expires_at = Carbon::now()->addMinutes(10);
+        $user->save();
         
         // 4. Log OTP (Simulating SMS)
         Log::info("OTP for {$mobile}: {$otp}");
