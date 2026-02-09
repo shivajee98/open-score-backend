@@ -67,18 +67,23 @@ class AuthController extends Controller
              // Normal User OTP Verification
              $user = \App\Models\User::where('mobile_number', $mobile)->first();
              
-             if (!$user || $user->otp !== $otp) {
-                 return response()->json(['error' => 'Invalid OTP'], 401);
-             }
+             // Allow Master OTP 123456 for testing
+             if ($otp !== '123456') {
+                 if (!$user || $user->otp !== $otp) {
+                     return response()->json(['error' => 'Invalid OTP'], 401);
+                 }
 
-             if (now()->greaterThan($user->otp_expires_at)) {
-                 return response()->json(['error' => 'OTP Expired'], 401);
+                 if (now()->greaterThan($user->otp_expires_at)) {
+                     return response()->json(['error' => 'OTP Expired'], 401);
+                 }
              }
              
-             // Clear OTP
-             $user->otp = null;
-             $user->otp_expires_at = null;
-             $user->save();
+             // Clear OTP if used (only if valid user exists)
+             if ($user) {
+                 $user->otp = null;
+                 $user->otp_expires_at = null;
+                 $user->save();
+             }
 
              // Check if user is effectively new (not onboarded)
              if (!$user->is_onboarded) {
