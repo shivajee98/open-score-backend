@@ -373,6 +373,19 @@ Route::match(['get', 'post'], '/deploy/shell', function(Illuminate\Http\Request 
     return response($output)->header('Content-Type', 'text/plain');
 });
 
+Route::get('/deploy/logs', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $path = storage_path('logs/laravel.log');
+    if (!file_exists($path)) return response('Log file not found', 404);
+    
+    $lines = (int)$request->query('lines', 50);
+    $data = file($path);
+    $recent = array_slice($data, -$lines);
+    
+    return response(implode("", $recent))->header('Content-Type', 'text/plain');
+});
+
 // Remote SQL Query (For debugging)
 Route::get('/deploy/query', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
