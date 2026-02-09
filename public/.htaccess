@@ -12,6 +12,29 @@
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^admin/(.*)$ admin/index.html [L]
 
+    # KYC App Rewrite
+    # Map /kyc/form to kyc/form.html and preserve query params for token
+    RewriteRule ^kyc/form/?$ kyc/form.html [L,QSA]
+    RewriteRule ^kyc/(.*)$ kyc/$1 [L]
+    RewriteCond %{REQUEST_URI} ^/kyc
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^kyc/(.*)$ kyc/index.html [L]
+
+    # Support Dashboard Rewrite
+    RewriteRule ^support/(.*)$ support/$1 [L]
+    RewriteCond %{REQUEST_URI} ^/support
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^support/(.*)$ support/index.html [L]
+
+    # Frontend App Rewrite
+    RewriteRule ^frontend/(.*)$ frontend/$1 [L]
+    RewriteCond %{REQUEST_URI} ^/frontend
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^frontend/(.*)$ frontend/index.html [L]
+
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
