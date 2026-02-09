@@ -37,11 +37,6 @@ class AuthController extends Controller
         $role = $request->role; // REMOVE DEFAULT CUSTOMER
         $referralCode = $request->referral_code;
         
-        $referrerId = null;
-        $subUserId = null;
-        $cashbackAmount = 0;
-        $referralCampaignId = null;
-        
         \Log::info("Verify OTP Entry - Mobile: {$mobile}, Role: {$role}, Ref: {$referralCode}");
 
         // Normalize referral code
@@ -64,49 +59,36 @@ class AuthController extends Controller
                  return response()->json(['error' => 'Invalid Admin Credentials'], 401);
             }
         } else {
-             // Normal User OTP Verification
+             // Normal User OTP Bypass (Demo)
              $user = \App\Models\User::where('mobile_number', $mobile)->first();
              
-             // Allow Master OTP 123456 for testing
-             if ($otp !== '123456') {
-                 if (!$user || $user->otp !== $otp) {
-                     return response()->json(['error' => 'Invalid OTP'], 401);
-                 }
-
-                 if (now()->greaterThan($user->otp_expires_at)) {
-                     return response()->json(['error' => 'OTP Expired'], 401);
-                 }
-             }
-             
-             // Clear OTP if used (only if valid user exists)
-             if ($user) {
-                 $user->otp = null;
-                 $user->otp_expires_at = null;
-                 $user->save();
-             }
-
-             // Check if user is effectively new (not onboarded)
-             if (!$user->is_onboarded) {
+             if (!$user) {
                  if (!$role) {
                      return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
                  }
                                   
                   // Handle Referral Logic for New User
                   $referralCampaignId = null;
-                   
+                  $subUserId = null;
+                  $cashbackAmount = 0;
+                  $referrerId = null; // Track who referred this user
+                  
                   if ($referralCode) {
                      // First priority: Check if it's a user's personal referral code
                      $referrer = \App\Models\User::where('my_referral_code', $referralCode)->first();
-                     if ($referrer) {
+                                          if ($referrer) {
                          \Log::info("Found personal referrer: {$referrer->id} for code: {$referralCode}");
+                         // This is a personal referral - will create UserReferral record after user creation
                          $referrerId = $referrer->id;
                          
+                         // Get signup bonus from referral settings
                          $referralSettings = \App\Models\ReferralSetting::first();
                          if ($referralSettings && $referralSettings->is_enabled) {
                              $cashbackAmount = $referralSettings->signup_bonus;
                          }
                      } else {
                          \Log::info("No personal referrer found for code: {$referralCode}. Checking sub-users...");
+                         // Check if it's a sub-user referral code
                          $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
                              ->where('is_active', true)
                              ->first();
@@ -115,6 +97,7 @@ class AuthController extends Controller
                              $subUserId = $subUser->id;
                              $cashbackAmount = $subUser->default_signup_amount;
                          } else {
+                             // Check regular referral campaign
                              $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
                                  ->where('is_active', true)
                                  ->first();
@@ -125,6 +108,7 @@ class AuthController extends Controller
                          }
                      }
                   } else {
+                      // Get default signup cashback from settings
                       $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $role)
                           ->where('is_active', true)
                           ->first();
@@ -133,111 +117,99 @@ class AuthController extends Controller
                       }
                   }
 
-                  \Log::info("Updating new user: {$mobile} with role: {$role} and referral: {$referralCode}");
+                  \Log::info("Creating new user: {$mobile} with role: {$role} and referral: {$referralCode}");
 
-                  // Update Existing User (Created by requestOtp)
-                  $user->role = $role;
-                  $user->referral_campaign_id = $referralCampaignId;
-                  $user->sub_user_id = $subUserId;
-                  if (empty($user->my_referral_code)) {
-                      $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
-                  }
-                  $user->save();
+                  // Create new user (Customer/Merchant)
+                  $user = \App\Models\User::create([
+                      'mobile_number' => $mobile,
+                      'role' => $role,
+                      'status' => 'ACTIVE',
+                      'is_onboarded' => false,
+                      'password' => bcrypt('password'),
+                      'referral_campaign_id' => $referralCampaignId,
+                      'sub_user_id' => $subUserId,
+                      'my_referral_code' => strtoupper(\Illuminate\Support\Str::random(8))
+                  ]);
 
-                  \Log::info("User updated ID: {$user->id}");
+                  \Log::info("User created with ID: {$user->id}, is_onboarded: " . ($user->is_onboarded ? 'true' : 'false'));
 
                   // Create Wallet for new user
                   $walletService = app(\App\Services\WalletService::class);
-                  if (!$user->wallet) {
-                      $walletService->createWallet($user->id);
-                  }
+                  $walletService->createWallet($user->id);
 
                   // Handle personal referral - Create UserReferral record
                   if ($referrerId) {
-                      // Check if referral already exists to prevent duplicates
-                      $existingReferral = \App\Models\UserReferral::where('referred_id', $user->id)->first();
+                      \Log::info("Processing personal referral from: {$referrerId}");
+                      $referralSettings = \App\Models\ReferralSetting::first();
+                      $signupBonus = $referralSettings ? $referralSettings->signup_bonus : 100;
                       
-                      if (!$existingReferral) {
-                          \Log::info("Processing personal referral from: {$referrerId}");
-                          $referralSettings = \App\Models\ReferralSetting::first();
-                          $signupBonus = $referralSettings ? $referralSettings->signup_bonus : 100;
+                      try {
+                          \App\Models\UserReferral::create([
+                              'referrer_id' => $referrerId,
+                              'referred_id' => $user->id,
+                              'referral_code' => strtoupper($referralCode),
+                              'signup_bonus_earned' => $signupBonus,
+                              'signup_bonus_paid' => false
+                          ]);
                           
-                          try {
-                              \App\Models\UserReferral::create([
-                                  'referrer_id' => $referrerId,
-                                  'referred_id' => $user->id,
-                                  'referral_code' => strtoupper($referralCode),
-                                  'signup_bonus_earned' => $signupBonus,
-                                  'signup_bonus_paid' => false
-                              ]);
-                              
-                              // Credit signup bonus to referrer from System Wallet
-                              $walletService->transferSystemFunds(
-                                  $referrerId,
-                                  $signupBonus,
-                                  'REFERRAL_SIGNUP_BONUS',
-                                  "Referral bonus for {$user->mobile_number} signup",
-                                  'OUT'
-                              );
-                              
-                              // Mark as paid
-                              \App\Models\UserReferral::where('referred_id', $user->id)->update([
-                                  'signup_bonus_paid' => true,
-                                  'signup_bonus_paid_at' => now()
-                              ]);
-                              \Log::info("Referral bonus of {$signupBonus} sent to referrer: {$referrerId}");
-                          } catch (\Exception $e) {
-                              \Log::error("Failed to process referral bonus: " . $e->getMessage());
-                          }
+                          // Credit signup bonus to referrer from System Wallet
+                          $walletService->transferSystemFunds(
+                              $referrerId,
+                              $signupBonus,
+                              'REFERRAL_SIGNUP_BONUS',
+                              "Referral bonus for {$user->mobile_number} signup",
+                              'OUT'
+                          );
+                          
+                          // Mark as paid
+                          \App\Models\UserReferral::where('referred_id', $user->id)->update([
+                              'signup_bonus_paid' => true,
+                              'signup_bonus_paid_at' => now()
+                          ]);
+                          \Log::info("Referral bonus of {$signupBonus} sent to referrer: {$referrerId}");
+                      } catch (\Exception $e) {
+                          \Log::error("Failed to process referral bonus: " . $e->getMessage());
                       }
                   }
 
                   // Credit Referral/Signup Bonus to new user
                   if ($cashbackAmount > 0) {
-                      // Check if already credited to allow idempotency
-                      $alreadyCredited = \App\Models\WalletTransaction::where('wallet_id', $user->wallet->id)
-                          ->where('source_type', 'like', '%BONUS%')
-                          ->exists();
-                          
-                      if (!$alreadyCredited) {
-                          \Log::info("Crediting welcome bonus: {$cashbackAmount} to new user: {$user->id}");
-                          $wallet = $user->wallet;
-                          
-                          try {
-                              // If sub-user referral, deduct from sub-user credit
-                              if ($subUserId && isset($subUser)) {
-                                  if ($subUser->credit_balance >= $cashbackAmount) {
-                                      $subUser->credit_balance -= $cashbackAmount;
-                                      $subUser->save();
-                                      
-                                      $walletService->credit(
-                                          $wallet->id,
-                                          $cashbackAmount,
-                                          'SUB_USER_REFERRAL_BONUS',
-                                          $user->id,
-                                          "Welcome Bonus from sub-user: {$subUser->name}"
-                                      );
-                                  }
-                              } else {
-                                  // Standard bonus from System Wallet
-                                  $walletService->transferSystemFunds(
-                                      $user->id,
+                      \Log::info("Crediting welcome bonus: {$cashbackAmount} to new user: {$user->id}");
+                      $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
+                      
+                      try {
+                          // If sub-user referral, deduct from sub-user credit
+                          if ($subUserId && isset($subUser)) {
+                              if ($subUser->credit_balance >= $cashbackAmount) {
+                                  $subUser->credit_balance -= $cashbackAmount;
+                                  $subUser->save();
+                                  
+                                  $walletService->credit(
+                                      $wallet->id,
                                       $cashbackAmount,
-                                      $referralCampaignId ? 'REFERRAL_BONUS' : ($referrerId ? 'REFERRAL_WELCOME_BONUS' : 'SIGNUP_BONUS'),
-                                      $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus'),
-                                      'OUT'
+                                      'SUB_USER_REFERRAL_BONUS',
+                                      $user->id,
+                                      "Welcome Bonus from sub-user: {$subUser->name}"
                                   );
                               }
-                              \Log::info("Welcome bonus credited successfully.");
-                          } catch (\Exception $e) {
-                              \Log::error("Failed to credit welcome bonus: " . $e->getMessage());
+                          } else {
+                              // Standard bonus from System Wallet
+                              $walletService->transferSystemFunds(
+                                  $user->id,
+                                  $cashbackAmount,
+                                  $referralCampaignId ? 'REFERRAL_BONUS' : ($referrerId ? 'REFERRAL_WELCOME_BONUS' : 'SIGNUP_BONUS'),
+                                  $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus'),
+                                  'OUT'
+                              );
                           }
+                          \Log::info("Welcome bonus credited successfully.");
+                      } catch (\Exception $e) {
+                          \Log::error("Failed to credit welcome bonus: " . $e->getMessage());
                       }
                   }
 
 
              } else {
-                // Existing Onboarded User Logic...
                  
                  // Ensure existing user has a referral code
                  if (empty($user->my_referral_code)) {
@@ -275,14 +247,7 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type' => 'bearer',
             'user' => $user,
-            'onboarding_status' => $user->is_onboarded ? 'COMPLETED' : 'REQUIRED',
-            'debug_info' => [
-                'referral_code' => $referralCode ?? null,
-                'referrer_id' => $referrerId ?? null,
-                'cashback_amount' => $cashbackAmount ?? 0,
-                'sub_user_id' => $subUserId ?? null,
-                'role' => $user->role
-            ]
+            'onboarding_status' => $user->is_onboarded ? 'COMPLETED' : 'REQUIRED'
         ]);
     }
 
