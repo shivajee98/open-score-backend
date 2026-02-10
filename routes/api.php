@@ -302,6 +302,18 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     return response($output);
 });
 
+// Temporary Seeding Trigger
+Route::get('/deploy/seed-plans', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    try {
+        Artisan::call('db:seed', ['--class' => 'NewLoanPlansSeeder', '--force' => true]);
+        return response("Seeding Successful: " . Artisan::output());
+    } catch (\Exception $e) {
+        return response("Seeding Failed: " . $e->getMessage(), 500);
+    }
+});
+
 // Remote Env Update Trigger
 Route::get('/deploy/update-env', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
