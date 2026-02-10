@@ -87,7 +87,7 @@ class SupportAgentController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'mobile_number' => 'required|string|unique:users,mobile_number',
+            'mobile_number' => 'required|string|digits:10|unique:users,mobile_number',
             'password' => 'required|string|min:6',
             'support_category_id' => 'required|exists:support_categories,id'
         ]);
@@ -111,7 +111,7 @@ class SupportAgentController extends Controller
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
-            'mobile_number' => ['sometimes', Rule::unique('users')->ignore($agent->id)],
+            'mobile_number' => ['sometimes', 'digits:10', Rule::unique('users')->ignore($agent->id)],
             'password' => 'nullable|string|min:6',
             'support_category_id' => 'sometimes|exists:support_categories,id',
             'status' => 'sometimes|in:ACTIVE,INACTIVE'

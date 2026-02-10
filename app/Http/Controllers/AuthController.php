@@ -488,4 +488,31 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Profile updated successfully', 'user' => $user]);
     }
+    public function agentLogin(Request $request)
+    {
+        $request->validate([
+            'mobile_number' => 'required|string',
+            'password' => 'required|string',
+        ]);
+
+        $user = \App\Models\User::where('mobile_number', $request->mobile_number)
+            ->where('role', 'SUPPORT_AGENT')
+            ->first();
+
+        if (!$user || !\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
+        }
+
+        if ($user->status === 'INACTIVE') {
+            return response()->json(['message' => 'Account is inactive'], 403);
+        }
+
+        $token = Auth::guard('api')->login($user);
+
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'user' => $user->load('supportCategory'),
+        ]);
+    }
 }

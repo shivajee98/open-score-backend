@@ -331,7 +331,17 @@ class AdminController extends Controller
     public function creditCashback(Request $request, $id)
     {
         $admin = \Illuminate\Support\Facades\Auth::user();
-        if(!in_array($admin->role, ['ADMIN', 'SUPPORT'])) {
+        $isSupportAgent = $admin->role === 'SUPPORT_AGENT';
+        $hasCashbackPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $admin->supportCategory;
+             if (!$category || $category->slug !== 'cashback_issue') {
+                 $hasCashbackPermission = false;
+             }
+        }
+
+        if(!in_array($admin->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT']) || !$hasCashbackPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -477,6 +487,11 @@ class AdminController extends Controller
 
     public function getUserTransactions($userId)
     {
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
         $wallet = $this->walletService->getWallet($userId);
         if (!$wallet) return response()->json([]);
 
@@ -545,9 +560,14 @@ class AdminController extends Controller
 
     public function getUserFullDetails($id)
     {
-        $user = \App\Models\User::with(['wallet'])->find($id);
+        $user = \Illuminate\Support\Facades\Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $targetUser = \App\Models\User::with(['wallet'])->find($id);
         
-        if (!$user) {
+        if (!$targetUser) {
             return response()->json(['message' => 'User not found'], 404);
         }
         

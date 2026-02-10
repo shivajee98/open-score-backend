@@ -24,6 +24,7 @@ Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 
 Route::post('/auth/test-push', [\App\Http\Controllers\Api\NotificationController::class, 'sendTestNotification']);
 Route::get('/support/categories', [\App\Http\Controllers\Admin\SupportAgentController::class, 'getCategoriesPublic']);
 Route::post('/support/agent/check', [\App\Http\Controllers\Admin\SupportAgentController::class, 'checkAgentByMobile']);
+Route::post('/auth/support/login', [AuthController::class, 'agentLogin']);
 
 Route::middleware('auth:api,sub-user')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);

@@ -490,7 +490,18 @@ class LoanController extends Controller
 
     public function proceed(Request $request, $id)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        $user = Auth::user();
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $user->supportCategory;
+             if (!$category || $category->slug !== 'loan_kyc_other') {
+                 $hasPermission = false;
+             }
+        }
+
+        if(!in_array($user->role, ['ADMIN', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -507,7 +518,18 @@ class LoanController extends Controller
 
     public function sendKyc(Request $request, $id)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        $user = Auth::user();
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $user->supportCategory;
+             if (!$category || $category->slug !== 'loan_kyc_other') {
+                 $hasPermission = false;
+             }
+        }
+
+        if(!in_array($user->role, ['ADMIN', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -613,7 +635,18 @@ class LoanController extends Controller
 
     public function approve(Request $request, $id)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        $user = Auth::user();
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $user->supportCategory;
+             if (!$category || $category->slug !== 'loan_kyc_other') {
+                 $hasPermission = false;
+             }
+        }
+
+        if(!in_array($user->role, ['ADMIN', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -677,7 +710,18 @@ class LoanController extends Controller
 
     public function release(Request $request, $id)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        $user = Auth::user();
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $user->supportCategory;
+             if (!$category || $category->slug !== 'loan_kyc_other') {
+                 $hasPermission = false;
+             }
+        }
+
+        if(!in_array($user->role, ['ADMIN', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -1106,7 +1150,18 @@ class LoanController extends Controller
 
     public function manualCollect(Request $request, $repaymentId)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        $user = Auth::user();
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $user->supportCategory;
+             if (!$category || $category->slug !== 'transfer_emi_issue') {
+                 $hasPermission = false;
+             }
+        }
+
+        if(!in_array($user->role, ['ADMIN', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -1138,7 +1193,18 @@ class LoanController extends Controller
 
     public function approveManualCollect($repaymentId)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        $user = Auth::user();
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $user->supportCategory;
+             if (!$category || $category->slug !== 'transfer_emi_issue') {
+                 $hasPermission = false;
+             }
+        }
+
+        if(!in_array($user->role, ['ADMIN', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -1259,7 +1325,17 @@ class LoanController extends Controller
     {
         // Check Admin/Support role
         $user = Auth::user();
-        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+             $category = $user->supportCategory;
+             if (!$category || $category->slug !== 'transfer_emi_issue') {
+                 $hasPermission = false;
+             }
+        }
+
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
