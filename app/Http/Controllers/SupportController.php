@@ -116,13 +116,16 @@ class SupportController extends Controller
         $issueType = $request->issue_type;
 
         $slugMap = [
+            'emi_payment'           => 'transfer_emi_issue',
+            'wallet_topup'          => 'wallet_topup',
+            'services'              => 'services',
             'cashback_not_received' => 'cashback_issue',
             'unable_to_transfer'    => 'transfer_emi_issue',
             'loan'                  => 'loan_kyc_other',
             'general'               => 'loan_kyc_other', // Default
         ];
 
-        $targetSlug = $slugMap[$issueType] ?? $issueType;
+        $targetSlug = $slugMap[$issueType] ?? 'loan_kyc_other';
 
         if (is_numeric($issueType)) {
             $cat = \App\Models\SupportCategory::find($issueType);
