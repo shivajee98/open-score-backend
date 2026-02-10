@@ -86,7 +86,7 @@ class SupportController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'subject' => 'required|string|max:255',
-            'issue_type' => 'required|string|in:cashback_not_received,unable_to_transfer,general',
+            'issue_type' => 'required|string|in:cashback_not_received,unable_to_transfer,loan,general',
             'message' => 'required|string',
             'priority' => 'in:low,medium,high',
         ]);
@@ -102,6 +102,7 @@ class SupportController extends Controller
         $agentMap = [
             'cashback_not_received' => ['9000000001', '9000000002'],
             'unable_to_transfer'    => ['9000000003'],
+            'loan'                  => ['9000000001', '9000000002'],
             'general'               => ['9000000004'],
         ];
 

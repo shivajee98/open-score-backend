@@ -328,6 +328,46 @@ class AdminController extends Controller
         return response()->json(['message' => 'Credit request submitted for approval']);
     }
 
+    public function creditCashback(Request $request, $id)
+    {
+        $admin = \Illuminate\Support\Facades\Auth::user();
+        if(!in_array($admin->role, ['ADMIN', 'SUPPORT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'description' => 'required|string'
+        ]);
+
+        $user = \App\Models\User::findOrFail($id);
+        $wallet = $this->walletService->getWallet($user->id);
+        
+        if (!$wallet) {
+            $wallet = $this->walletService->createWallet($user->id);
+        }
+
+        // Create COMPLETED transaction for Cashback
+        $this->walletService->credit(
+            $wallet->id,
+            $request->amount,
+            'CASHBACK',
+            $admin->id,
+            $request->description,
+            'COMPLETED'
+        );
+
+        DB::table('admin_logs')->insert([
+            'admin_id' => $admin->id,
+            'action' => 'cashback_disbursed',
+            'description' => "Disbursed cashback of ₹{$request->amount} for {$user->name}. Reason: {$request->description}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['message' => 'Cashback credited successfully']);
+    }
+
     public function getPendingTransactions()
     {
         $pending = \App\Models\WalletTransaction::with('wallet.user')
