@@ -302,6 +302,15 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     return response($output);
 });
 
+// Version Check
+Route::get('/deploy/version', function() {
+    return response()->json([
+        'laravel' => app()->version(),
+        'php' => PHP_VERSION,
+        'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'unknown'
+    ]);
+});
+
 // Remote Env Update Trigger
 Route::get('/deploy/update-env', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
