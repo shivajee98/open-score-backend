@@ -1131,7 +1131,8 @@ class LoanController extends Controller
 
     public function getDetails($id)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        $user = Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -1413,7 +1414,7 @@ class LoanController extends Controller
         $loan = Loan::find($repayment->loan_id);
         $customer = \App\Models\User::find($loan->user_id);
         $reason = $request->reason ? " Reason: " . $request->reason : "";
-        FcmService::sendToUser($customer, "Payment Rejected ❌", "Your payment proof for ₹" . number_format($repayment->amount) . " was rejected.{$reason}");
+        FcmService::sendToUser($customer, "Payment Rejected ", "Your payment proof for ₹" . number_format($repayment->amount) . " was rejected.{$reason}");
 
         return response()->json(['message' => 'Payment rejected', 'repayment' => $repayment]);
     }
@@ -1424,7 +1425,17 @@ class LoanController extends Controller
     public function getPendingRepayments(Request $request) 
     {
         $user = Auth::user();
-        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+        $isSupportAgent = $user->role === 'SUPPORT_AGENT';
+        $hasPermission = true;
+
+        if ($isSupportAgent) {
+            $category = $user->supportCategory;
+            if (!$category || $category->slug !== 'transfer_emi_issue') {
+                $hasPermission = false;
+            }
+        }
+
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT']) || !$hasPermission) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
