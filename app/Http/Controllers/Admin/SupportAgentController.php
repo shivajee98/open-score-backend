@@ -138,12 +138,12 @@ class SupportAgentController extends Controller
 
     public function getCategoriesPublic()
     {
-        // Return only id and label for frontend
+        // Return id, label and slug
         return response()->json(
             SupportCategory::select('id', 'name', 'slug')->get()
                 ->map(function ($cat) {
                     return [
-                        'id' => $cat->id, // Or slug if you prefer using slug as ID in frontend
+                        'id' => $cat->slug, // Use slug as ID for better issue_type tracking
                         'label' => $cat->name,
                         'slug' => $cat->slug
                     ];

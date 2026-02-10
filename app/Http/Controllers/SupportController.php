@@ -91,7 +91,7 @@ class SupportController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'subject' => 'required|string|max:255',
-            'issue_type' => 'required|string|in:cashback_not_received,unable_to_transfer,loan,general',
+            'issue_type' => 'required|string',
             'message' => 'required|string',
             'priority' => 'in:low,medium,high',
         ]);
@@ -112,11 +112,16 @@ class SupportController extends Controller
             'general'               => 'loan_kyc_other', // Default
         ];
 
-        if (isset($slugMap[$issueType])) {
-            $cat = \App\Models\SupportCategory::where('slug', $slugMap[$issueType])->first();
-            if ($cat) {
-                 $categoryId = $cat->id;
-            }
+        $targetSlug = $slugMap[$issueType] ?? $issueType;
+
+        if (is_numeric($issueType)) {
+            $cat = \App\Models\SupportCategory::find($issueType);
+        } else {
+            $cat = \App\Models\SupportCategory::where('slug', $targetSlug)->first();
+        }
+
+        if ($cat) {
+             $categoryId = $cat->id;
         }
 
         $ticket = SupportTicket::create([
