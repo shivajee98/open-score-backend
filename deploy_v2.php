@@ -9,6 +9,7 @@ if ($key !== 'openscore_deploy_2026') {
 }
 
 echo "<h2>Deployment V2 Started</h2>";
+echo "Version: 3.1 (Migration Debug)<br>";
 
 // 1. Pull Latest Code to Backend
 chdir('/home/u910898544/domains/msmeloan.sbs/public_html/api');
