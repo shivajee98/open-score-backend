@@ -21,6 +21,9 @@ class LoanRepayment extends Model
         'collected_by',
         'notes',
         'proof_image',
+        'admin_note',
+        'submitted_at',
+        'submitted_by',
         'is_manual_collection'
     ];
 

@@ -1423,8 +1423,8 @@ class LoanController extends Controller
 
         $repayment = LoanRepayment::findOrFail($repaymentId);
 
-        if ($repayment->status !== 'PENDING_VERIFICATION') {
-            return response()->json(['error' => 'Repayment is not pending verification'], 400);
+        if (!in_array($repayment->status, ['PENDING_VERIFICATION', 'AGENT_APPROVED'])) {
+            return response()->json(['error' => 'Repayment is not in a rejectable state'], 400);
         }
 
         $repayment->status = 'PENDING'; // Revert to pending so they can try again or pay via wallet
