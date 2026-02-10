@@ -1073,7 +1073,7 @@ class LoanController extends Controller
 
     public function listAll(Request $request)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        if (!in_array(Auth::user()->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -1102,7 +1102,7 @@ class LoanController extends Controller
 
     public function listHistory(Request $request)
     {
-        if (Auth::user()->role !== 'ADMIN') {
+        if (!in_array(Auth::user()->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -1152,6 +1152,23 @@ class LoanController extends Controller
             'repayments' => $repayments
         ]);
     }
+
+    public function getUserActiveLoan($userId)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $loan = Loan::where('user_id', $userId)
+            ->whereNotIn('status', ['CLOSED', 'CANCELLED', 'REJECTED'])
+            ->with(['plan', 'user'])
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        return response()->json(['loan' => $loan]);
+    }
+
 
     public function manualCollect(Request $request, $repaymentId)
     {
@@ -1335,7 +1352,11 @@ class LoanController extends Controller
 
         if ($isSupportAgent) {
              $category = $user->supportCategory;
-             if (!$category || $category->slug !== 'transfer_emi_issue') {
+             // Relaxed check: Allow if slug/name contains relevant keywords
+             $slug = $category ? strtolower($category->slug) : '';
+             $name = $category ? strtolower($category->name) : '';
+             
+             if (!$category || (!str_contains($slug, 'emi') && !str_contains($slug, 'transfer') && !str_contains($slug, 'payment') && !str_contains($name, 'emi'))) {
                  $hasPermission = false;
              }
         }
@@ -1351,7 +1372,9 @@ class LoanController extends Controller
         }
 
         DB::transaction(function () use ($repayment, $user) {
-            if (in_array($user->role, ['SUPPORT_AGENT', 'SUPPORT'])) {
+            // Only SUPPORT_AGENT does the partial approval.
+            // ADMIN and SUPPORT (Manager) do full approval.
+            if ($user->role === 'SUPPORT_AGENT') {
                 // Agent Level Approval
                 $repayment->status = 'AGENT_APPROVED';
                 $repayment->agent_approved_at = now();
@@ -1366,12 +1389,12 @@ class LoanController extends Controller
                     'updated_at' => now(),
                 ]);
             } else {
-                // Admin Level Final Approval
+                // Admin/Manager Level Final Approval
                 $repayment->status = 'PAID';
                 $repayment->paid_at = now();
                 $repayment->collected_by = $user->id; // Verified by
-                if (!$repayment->agent_approved_at && in_array($user->role, ['ADMIN'])) {
-                    // If Admin approves directly, mark as also agent approved for consistency
+                if (!$repayment->agent_approved_at) {
+                    // If Admin approves directly, mark as also agent approved for consistency (self-approved)
                     $repayment->agent_approved_at = now();
                     $repayment->agent_approved_by = $user->id;
                 }
@@ -1415,7 +1438,7 @@ class LoanController extends Controller
     public function rejectManualRepayment(Request $request, $repaymentId)
     {
         $user = Auth::user();
-        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
@@ -1455,7 +1478,11 @@ class LoanController extends Controller
 
         if ($isSupportAgent) {
             $category = $user->supportCategory;
-            if (!$category || $category->slug !== 'transfer_emi_issue') {
+            // Relaxed check
+            $slug = $category ? strtolower($category->slug) : '';
+            $name = $category ? strtolower($category->name) : '';
+            
+            if (!$category || (!str_contains($slug, 'emi') && !str_contains($slug, 'transfer') && !str_contains($slug, 'payment') && !str_contains($name, 'emi'))) {
                 $hasPermission = false;
             }
         }

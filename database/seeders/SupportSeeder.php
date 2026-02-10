@@ -21,7 +21,7 @@ class SupportSeeder extends Seeder
                 'permissions' => ['view_profile', 'view_transaction', 'add_cashback'],
             ],
             [
-                'name' => 'Unable To Transfer & Approval EMI',
+                'name' => 'Unable To Transfer & Approve My Emi / Payment',
                 'slug' => 'transfer_emi_issue',
                 'permissions' => ['view_profile', 'view_transaction', 'approve_emi'],
             ],

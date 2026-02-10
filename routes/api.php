@@ -97,6 +97,7 @@ Route::middleware('auth:api,sub-user')->group(function () {
     // Admin User Management
     Route::get('/admin/users', [AdminController::class, 'getUsers']);
     Route::get('/admin/users/{id}/full-details', [AdminController::class, 'getUserFullDetails']);
+    Route::get('/admin/users/{id}/active-loan', [LoanController::class, 'getUserActiveLoan']);
     Route::post('/admin/users/{id}/credit', [AdminController::class, 'creditUser']);
     Route::post('/admin/users/{id}/credit-cashback', [AdminController::class, 'creditCashback']);
     Route::delete('/admin/users/{id}', [AdminController::class, 'deleteUser']);

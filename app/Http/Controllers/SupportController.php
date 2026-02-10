@@ -375,7 +375,7 @@ class SupportController extends Controller
     {
         $user = Auth::user();
 
-        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
