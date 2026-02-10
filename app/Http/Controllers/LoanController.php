@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use App\Models\LoanRepayment;
 use Carbon\Carbon;
 use App\Services\FcmService;
+use Illuminate\Support\Facades\Storage;
 
 class LoanController extends Controller
 {
@@ -495,7 +496,9 @@ class LoanController extends Controller
 
         if ($isSupportAgent) {
              $category = $user->supportCategory;
-             if (!$category || $category->slug !== 'loan_kyc_other') {
+             $slug = $category ? strtolower($category->slug) : '';
+             $name = $category ? strtolower($category->name) : '';
+             if (!$category || (!str_contains($slug, 'loan') && !str_contains($slug, 'kyc') && !str_contains($slug, 'emi') && !str_contains($name, 'loan'))) {
                  $hasPermission = false;
              }
         }
@@ -523,7 +526,9 @@ class LoanController extends Controller
 
         if ($isSupportAgent) {
              $category = $user->supportCategory;
-             if (!$category || $category->slug !== 'loan_kyc_other') {
+             $slug = $category ? strtolower($category->slug) : '';
+             $name = $category ? strtolower($category->name) : '';
+             if (!$category || (!str_contains($slug, 'loan') && !str_contains($slug, 'kyc') && !str_contains($slug, 'emi') && !str_contains($name, 'loan'))) {
                  $hasPermission = false;
              }
         }
@@ -546,6 +551,7 @@ class LoanController extends Controller
         
         $loan->status = 'KYC_SENT';
         $loan->kyc_sent_by = Auth::id();
+        $loan->kyc_submitted_at = null; // Reset to allow resubmission
         $loan->save();
 
         // Reflect loan amount in wallet as LOCKED (PENDING status)
@@ -593,7 +599,7 @@ class LoanController extends Controller
     {
         $loan = Loan::where('kyc_token', $token)->firstOrFail();
 
-        if ($loan->status === 'FORM_SUBMITTED' || $loan->kyc_submitted_at) {
+        if ($loan->kyc_submitted_at) {
             return response()->json(['error' => 'Already submitted'], 400);
         }
 
@@ -602,6 +608,27 @@ class LoanController extends Controller
             'amount' => $loan->amount,
             'status' => $loan->status
         ]);
+    }
+    public function uploadKycFile(Request $request, $token)
+    {
+        $loan = Loan::where('kyc_token', $token)->firstOrFail();
+
+        if ($loan->kyc_submitted_at) {
+            return response()->json(['error' => 'Already submitted'], 400);
+        }
+
+        $request->validate([
+            'file' => 'required|image|max:16384', // 16MB
+        ]);
+
+        if ($request->hasFile('file')) {
+            $path = $request->file('file')->store('kyc', 'public');
+            return response()->json([
+                'url' => url(Storage::url($path))
+            ]);
+        }
+
+        return response()->json(['error' => 'No file uploaded'], 400);
     }
 
     public function submitKycData(Request $request, $token)
@@ -640,7 +667,9 @@ class LoanController extends Controller
 
         if ($isSupportAgent) {
              $category = $user->supportCategory;
-             if (!$category || $category->slug !== 'loan_kyc_other') {
+             $slug = $category ? strtolower($category->slug) : '';
+             $name = $category ? strtolower($category->name) : '';
+             if (!$category || (!str_contains($slug, 'loan') && !str_contains($slug, 'kyc') && !str_contains($slug, 'emi') && !str_contains($name, 'loan'))) {
                  $hasPermission = false;
              }
         }
@@ -715,7 +744,9 @@ class LoanController extends Controller
 
         if ($isSupportAgent) {
              $category = $user->supportCategory;
-             if (!$category || $category->slug !== 'loan_kyc_other') {
+             $slug = $category ? strtolower($category->slug) : '';
+             $name = $category ? strtolower($category->name) : '';
+             if (!$category || (!str_contains($slug, 'loan') && !str_contains($slug, 'kyc') && !str_contains($slug, 'emi') && !str_contains($name, 'loan'))) {
                  $hasPermission = false;
              }
         }

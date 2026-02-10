@@ -19,6 +19,7 @@ Route::get('/merchants', [AuthController::class, 'listPayees']); // Legacy suppo
 
 // External KYC (Publicly accessible with token)
 Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
+Route::post('/kyc/upload/{token}', [LoanController::class, 'uploadKycFile']);
 Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
 Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 'show']);
 Route::post('/auth/test-push', [\App\Http\Controllers\Api\NotificationController::class, 'sendTestNotification']);
