@@ -16,6 +16,7 @@ class SupportTicket extends Model
         'status',
         'priority',
         'assigned_to',
+        'category_id',
     ];
 
     public function user()
@@ -31,5 +32,10 @@ class SupportTicket extends Model
     public function messages()
     {
         return $this->hasMany(TicketMessage::class);
+    }
+
+    public function category()
+    {
+        return $this->belongsTo(SupportCategory::class);
     }
 }

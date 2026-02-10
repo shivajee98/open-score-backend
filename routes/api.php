@@ -20,9 +20,10 @@ Route::get('/merchants', [AuthController::class, 'listPayees']); // Legacy suppo
 // External KYC (Publicly accessible with token)
 Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
 Route::post('/kyc/submit/{token}', [LoanController::class, 'submitKycData']);
-Route::get('/merchants/nearby', [\App\Http\Controllers\MerchantController::class, 'nearby']);
 Route::get('/merchants/{id}', [\App\Http\Controllers\MerchantController::class, 'show']);
 Route::post('/auth/test-push', [\App\Http\Controllers\Api\NotificationController::class, 'sendTestNotification']);
+Route::get('/support/categories', [\App\Http\Controllers\Admin\SupportAgentController::class, 'getCategoriesPublic']);
+Route::post('/support/agent/check', [\App\Http\Controllers\Admin\SupportAgentController::class, 'checkAgentByMobile']);
 
 Route::middleware('auth:api,sub-user')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
@@ -160,6 +161,17 @@ Route::middleware('auth:api,sub-user')->group(function () {
     // Admin Support Logic
     Route::get('/admin/support/tickets', [SupportController::class, 'adminIndex']);
     Route::post('/admin/support/assign/{id}', [SupportController::class, 'assign']);
+
+    // Admin Support Categories & Agents
+    Route::get('/admin/support/categories', [\App\Http\Controllers\Admin\SupportAgentController::class, 'indexCategories']);
+    Route::post('/admin/support/categories', [\App\Http\Controllers\Admin\SupportAgentController::class, 'storeCategory']);
+    Route::put('/admin/support/categories/{id}', [\App\Http\Controllers\Admin\SupportAgentController::class, 'updateCategory']);
+    Route::delete('/admin/support/categories/{id}', [\App\Http\Controllers\Admin\SupportAgentController::class, 'destroyCategory']);
+    
+    Route::get('/admin/support/agents', [\App\Http\Controllers\Admin\SupportAgentController::class, 'indexAgents']);
+    Route::post('/admin/support/agents', [\App\Http\Controllers\Admin\SupportAgentController::class, 'storeAgent']);
+    Route::put('/admin/support/agents/{id}', [\App\Http\Controllers\Admin\SupportAgentController::class, 'updateAgent']);
+    Route::delete('/admin/support/agents/{id}', [\App\Http\Controllers\Admin\SupportAgentController::class, 'destroyAgent']);
 
     // Admin User Details
     Route::get('/admin/users/{id}/transactions', [AdminController::class, 'getUserTransactions']);

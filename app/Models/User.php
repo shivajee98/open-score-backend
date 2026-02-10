@@ -47,7 +47,8 @@ class User extends Authenticatable implements JWTSubject
         'location_url',
         'description',
         'aadhar_number',
-        'pan_number'
+        'pan_number',
+        'support_category_id'
     ];
 
     protected $hidden = [
@@ -144,5 +145,10 @@ class User extends Authenticatable implements JWTSubject
     public function referredBy()
     {
         return $this->hasOne(UserReferral::class, 'referred_id');
+    }
+
+    public function supportCategory()
+    {
+        return $this->belongsTo(SupportCategory::class);
     }
 }
