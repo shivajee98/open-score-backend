@@ -19,6 +19,12 @@ class SupportController extends Controller
                 $q->latest()->limit(1); // Get latest message for preview
             }])
             ->where('user_id', $user->id)
+            ->when($request->status, function($q, $status) {
+                if ($status === 'active') {
+                    return $q->where('status', '!=', 'closed');
+                }
+                return $q->where('status', $status);
+            })
             ->latest()
             ->paginate(15);
 
@@ -39,6 +45,9 @@ class SupportController extends Controller
                 $q->latest()->limit(1);
             }, 'assignedAgent']) // meaningful relationship
             ->when($request->status, function($q, $status) {
+                if ($status === 'active') {
+                    return $q->where('status', '!=', 'closed');
+                }
                 return $q->where('status', $status);
             })
             ->when(in_array($user->role, ['SUPPORT', 'SUPPORT_AGENT']), function($q) use ($user) {
