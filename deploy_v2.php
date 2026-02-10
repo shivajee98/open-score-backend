@@ -43,7 +43,7 @@ function deploy_app($zipName, $targetDir) {
 
 // 2. Deploy Customer App (Root Domain or Subdomain?)
 // Assumption: customer.msmeloan.sbs maps to public_html/customer
-deploy_app('frontend_dist.zip', '/home/u910898544/domains/msmeloan.sbs/public_html/customer');
+deploy_app('frontend_dist.zip', '/home/u910898544/domains/msmeloan.sbs/public_html/openscore');
 
 // 3. Deploy Admin Panel
 deploy_app('admin_dist.zip', '/home/u910898544/domains/msmeloan.sbs/public_html/admin');
