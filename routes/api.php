@@ -163,6 +163,11 @@ Route::middleware('auth:api,sub-user')->group(function () {
     // Admin Support Logic
     Route::get('/admin/support/tickets', [SupportController::class, 'adminIndex']);
     Route::post('/admin/support/assign/{id}', [SupportController::class, 'assign']);
+    
+    // Payment Ticket Approval (Two-Tier: Agent -> Admin)
+    Route::get('/admin/support/payment-tickets', [SupportController::class, 'getPaymentTickets']);
+    Route::post('/admin/support/tickets/{id}/approve-payment', [SupportController::class, 'approveTicketPayment']);
+    Route::post('/admin/support/tickets/{id}/reject-payment', [SupportController::class, 'rejectTicketPayment']);
 
     // Admin Support Categories & Agents
     Route::get('/admin/support/categories', [\App\Http\Controllers\Admin\SupportAgentController::class, 'indexCategories']);

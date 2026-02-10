@@ -137,15 +137,29 @@ class SupportController extends Controller
              $categoryId = $cat->id;
         }
 
+        // Determine if this is a payment ticket
+        $paymentIssueTypes = ['emi_payment', 'wallet_topup', 'services'];
+        $isPaymentTicket = in_array($issueType, $paymentIssueTypes);
+
         $ticket = SupportTicket::create([
             'user_id' => Auth::id(),
             'subject' => $request->subject,
             'issue_type' => $issueType,
             'status' => 'open',
+            'payment_status' => $isPaymentTicket ? 'PENDING_VERIFICATION' : null,
+            'payment_amount' => $isPaymentTicket ? $request->payment_amount : null,
             'priority' => $request->priority ?? 'medium',
             'assigned_to' => $assignedTo,
             'category_id' => $categoryId,
         ]);
+
+        // Auto-generate unique_ticket_id for payment tickets
+        if ($isPaymentTicket) {
+            $prefixMap = ['emi_payment' => 'EMI', 'wallet_topup' => 'WAL', 'services' => 'SVC'];
+            $prefix = $prefixMap[$issueType] ?? 'GEN';
+            $ticket->unique_ticket_id = "TKT-{$prefix}-{$ticket->id}";
+            $ticket->save();
+        }
 
         // Handle attachment upload (screenshot)
         $attachmentUrl = null;
@@ -289,5 +303,147 @@ class SupportController extends Controller
         $ticket->update($updateData);
 
         return response()->json($ticket);
+    }
+
+    // Approve a payment ticket (Two-tier: Agent -> Admin)
+    public function approveTicketPayment(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $ticket = SupportTicket::findOrFail($id);
+
+        if (!$ticket->payment_status) {
+            return response()->json(['message' => 'This ticket is not a payment ticket'], 400);
+        }
+
+        if (!in_array($ticket->payment_status, ['PENDING_VERIFICATION', 'AGENT_APPROVED'])) {
+            return response()->json(['message' => 'Ticket is not in an approvable state'], 400);
+        }
+
+        if (in_array($user->role, ['SUPPORT_AGENT', 'SUPPORT'])) {
+            // Agent-level approval
+            if ($ticket->payment_status !== 'PENDING_VERIFICATION') {
+                return response()->json(['message' => 'Already approved by agent'], 400);
+            }
+
+            $ticket->payment_status = 'AGENT_APPROVED';
+            $ticket->agent_approved_at = now();
+            $ticket->agent_approved_by = $user->id;
+            $ticket->save();
+
+            \DB::table('admin_logs')->insert([
+                'admin_id' => $user->id,
+                'action' => 'ticket_payment_agent_approved',
+                'description' => "Agent pre-approved payment ticket #{$ticket->unique_ticket_id} for ₹{$ticket->payment_amount}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        } else {
+            // Admin-level final approval
+            $ticket->payment_status = 'ADMIN_APPROVED';
+            $ticket->admin_approved_at = now();
+            $ticket->admin_approved_by = $user->id;
+
+            // If admin approves directly without agent step, record both
+            if (!$ticket->agent_approved_at) {
+                $ticket->agent_approved_at = now();
+                $ticket->agent_approved_by = $user->id;
+            }
+
+            $ticket->status = 'closed';
+            $ticket->save();
+
+            \DB::table('admin_logs')->insert([
+                'admin_id' => $user->id,
+                'action' => 'ticket_payment_admin_approved',
+                'description' => "Admin approved payment ticket #{$ticket->unique_ticket_id} for ₹{$ticket->payment_amount}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return response()->json($ticket->load(['user', 'approvedByAgent', 'approvedByAdmin']));
+    }
+
+    // Reject a payment ticket
+    public function rejectTicketPayment(Request $request, $id)
+    {
+        $user = Auth::user();
+
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate(['reason' => 'required|string']);
+
+        $ticket = SupportTicket::findOrFail($id);
+
+        if (!$ticket->payment_status) {
+            return response()->json(['message' => 'This ticket is not a payment ticket'], 400);
+        }
+
+        if (!in_array($ticket->payment_status, ['PENDING_VERIFICATION', 'AGENT_APPROVED'])) {
+            return response()->json(['message' => 'Ticket is not in a rejectable state'], 400);
+        }
+
+        $ticket->payment_status = 'REJECTED';
+        $ticket->rejection_reason = $request->reason;
+        $ticket->save();
+
+        \DB::table('admin_logs')->insert([
+            'admin_id' => $user->id,
+            'action' => 'ticket_payment_rejected',
+            'description' => "Rejected payment ticket #{$ticket->unique_ticket_id}: {$request->reason}",
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Notify user via FCM
+        try {
+            $customer = \App\Models\User::find($ticket->user_id);
+            if ($customer) {
+                \App\Services\FcmService::sendToUser(
+                    $customer,
+                    "Payment Rejected ❌",
+                    "Your payment of ₹" . number_format($ticket->payment_amount) . " was rejected. Reason: " . $request->reason,
+                );
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('FCM notification failed: ' . $e->getMessage());
+        }
+
+        return response()->json(['message' => 'Payment rejected', 'ticket' => $ticket]);
+    }
+
+    // Get payment tickets for approval dashboard
+    public function getPaymentTickets(Request $request)
+    {
+        $user = Auth::user();
+
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $tickets = SupportTicket::with(['user', 'assignedAgent', 'approvedByAgent', 'approvedByAdmin', 'messages' => function($q) {
+                $q->latest()->limit(1);
+            }])
+            ->whereNotNull('payment_status')
+            ->when($request->status, function($q, $status) {
+                return $q->where('payment_status', $status);
+            })
+            ->when(in_array($user->role, ['SUPPORT_AGENT']), function($q) use ($user) {
+                if ($user->support_category_id) {
+                    return $q->where('category_id', $user->support_category_id);
+                }
+            })
+            ->latest()
+            ->paginate(20);
+
+        return response()->json($tickets);
     }
 }
