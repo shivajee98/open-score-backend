@@ -93,9 +93,10 @@ class Loan extends Model
                     }
                 }
 
-                // GST Calculation based on Processing Fees
+                // GST Calculation based on ALL Fees (not just processing)
                 if ($gst == 0) {
-                    $gst = round($processingFee * ($gstRate / 100));
+                    $allFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
+                    $gst = round($allFees * ($gstRate / 100));
                 }
 
                 // INTEREST

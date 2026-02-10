@@ -299,12 +299,12 @@ class LoanController extends Controller
         $months = $tenureDays / 30;
         $totalInterest = round(($amount * $interestRate / 100) * $months);
         
-        // Calculate GST based on Processing Fees only
+        // Calculate GST based on ALL Fees (not just processing)
         $gstRate = $gstRate ?? 18; // Default 18 if not found in config
-        $gst = round($processingFee * ($gstRate / 100));
+        $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
+        $gst = round($totalFees * ($gstRate / 100));
         
         // Calculate totals
-        $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
         $totalPayable = $amount + $totalFees + $gst + $totalInterest;
         $emiAmount = round($totalPayable / $numEmis);
         
@@ -902,9 +902,10 @@ class LoanController extends Controller
                 }
                 
                  
-                // Calculate GST based on Processing Fees only
+                // Calculate GST based on ALL Fees (not just processing)
                 $gstRate = isset($config['gst_rate']) ? (float)$config['gst_rate'] : 18;
-                $gstAmount = round($processingFee * ($gstRate / 100)); 
+                $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
+                $gstAmount = round($totalFees * ($gstRate / 100)); 
 
                 $totalFees = $processingFee + $loginFee + $fieldKycFee + $otherFees;
                 
