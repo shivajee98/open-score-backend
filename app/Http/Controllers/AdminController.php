@@ -619,6 +619,12 @@ class AdminController extends Controller
                     ];
                 });
         }
+
+        // Pending EMIs for ongoing loans
+        $pendingEmis = \App\Models\LoanRepayment::whereIn('loan_id', $ongoingLoans->pluck('id'))
+            ->where('status', '!=', 'PAID')
+            ->orderBy('due_date', 'asc')
+            ->get();
         
         return response()->json([
             'user' => [
@@ -637,7 +643,8 @@ class AdminController extends Controller
             'loans' => [
                 'ongoing' => $ongoingLoans->values(),
                 'past' => $pastLoans->values(),
-                'total_count' => $loans->count()
+                'total_count' => $loans->count(),
+                'pending_emis' => $pendingEmis
             ],
             'transactions' => $transactions
         ]);

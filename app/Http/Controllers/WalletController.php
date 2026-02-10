@@ -89,7 +89,13 @@ class WalletController extends Controller
                     }
                 }
             } elseif ($tx->source_type === 'LOAN') {
-                $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Loan Disbursed' : 'Loan Repayment';
+                if ($tx->type === 'CREDIT') {
+                    // Show "Loan Disbursed" only after admin releases funds (COMPLETED)
+                    // Show "Loan Processing" while pending release
+                    $tx->counterparty_name = $tx->status === 'COMPLETED' ? 'Loan Disbursed' : 'Loan Processing';
+                } else {
+                    $tx->counterparty_name = 'Loan Repayment';
+                }
             } elseif ($tx->source_type === 'ADMIN_CREDIT') {
                 $tx->counterparty_name = 'System Credit';
                 $tx->counterparty_vpa = 'support@openscore';

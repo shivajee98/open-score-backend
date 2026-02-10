@@ -26,7 +26,7 @@ class SupportSeeder extends Seeder
                 'permissions' => ['view_profile', 'view_transaction', 'approve_emi'],
             ],
             [
-                'name' => 'Loan / KYC / Other',
+                'name' => 'Loan / KYC / Payment / Other',
                 'slug' => 'loan_kyc_other',
                 'permissions' => ['view_profile', 'view_transaction', 'approve_loan', 'update_kyc'],
             ],

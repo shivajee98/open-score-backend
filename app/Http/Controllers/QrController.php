@@ -122,27 +122,90 @@ class QrController extends Controller
             return response()->json(['message' => 'QR Code not found'], 404);
         }
 
+        if ($qr->status === 'assigned') {
+            return response()->json(['message' => 'Cannot delete a mapped QR code'], 400);
+        }
+
         DB::table('qr_codes')->where('id', $id)->delete();
 
         return response()->json(['message' => 'QR Code deleted successfully']);
     }
 
-    public function deleteAllBatches()
+    public function deleteBatchUnmapped($id)
     {
-        // Ensure only ADMIN can do this
         if (Auth::user()->role !== 'ADMIN') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         try {
-            DB::statement('SET FOREIGN_KEY_CHECKS=0');
-            DB::table('qr_codes')->truncate();
-            DB::table('qr_batches')->truncate();
-            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            DB::beginTransaction();
+            
+            // Delete only active (unmapped) codes for this batch
+            $deletedCount = DB::table('qr_codes')
+                ->where('batch_id', $id)
+                ->where('status', '!=', 'assigned')
+                ->delete();
 
-            return response()->json(['message' => 'All batches and codes deleted successfully']);
+            // Check if there are any remaining codes in this batch
+            $remainingCount = DB::table('qr_codes')->where('batch_id', $id)->count();
+            
+            if ($remainingCount === 0) {
+                // If no codes left (not even assigned ones), we can delete the batch record too
+                DB::table('qr_batches')->where('id', $id)->delete();
+            } else {
+                // Otherwise, update the batch count to reflect reality
+                DB::table('qr_batches')->where('id', $id)->update(['count' => $remainingCount]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => "Deleted $deletedCount unmapped codes from batch.",
+                'remaining' => $remainingCount
+            ]);
         } catch (\Exception $e) {
-            DB::statement('SET FOREIGN_KEY_CHECKS=1');
+            DB::rollBack();
+            return response()->json(['message' => 'Error clearing data: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function deleteGlobalUnmapped()
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Delete all codes not assigned
+            $deletedCount = DB::table('qr_codes')
+                ->where('status', '!=', 'assigned')
+                ->delete();
+
+            // Cleanup empty batches
+            $emptyBatchIds = DB::table('qr_batches')
+                ->whereNotExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('qr_codes')
+                        ->whereRaw('qr_codes.batch_id = qr_batches.id');
+                })
+                ->pluck('id');
+
+            DB::table('qr_batches')->whereIn('id', $emptyBatchIds)->delete();
+
+            // Update remaining batches' counts
+            $remainingBatches = DB::table('qr_batches')->get();
+            foreach ($remainingBatches as $batch) {
+                $count = DB::table('qr_codes')->where('batch_id', $batch->id)->count();
+                DB::table('qr_batches')->where('id', $batch->id)->update(['count' => $count]);
+            }
+
+            DB::commit();
+
+            return response()->json(['message' => "Deleted $deletedCount unmapped codes globally across the system."]);
+        } catch (\Exception $e) {
+            DB::rollBack();
             return response()->json(['message' => 'Error clearing data: ' . $e->getMessage()], 500);
         }
     }

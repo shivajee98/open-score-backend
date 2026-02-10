@@ -14,6 +14,15 @@ echo "<h2>Deployment V2 Started</h2>";
 chdir('/home/u910898544/domains/msmeloan.sbs/public_html/api');
 echo "Git Pull: " . shell_exec('git pull origin main 2>&1') . "<br>";
 
+// 1b. Run Database Migrations (Optional)
+if (isset($_GET['migrate']) && $_GET['migrate'] === 'true') {
+    echo "<h3>Executing Migrations (migrate.sh)...</h3>";
+    // Ensure permission
+    shell_exec('chmod +x migrate.sh');
+    $output = shell_exec('bash migrate.sh 2>&1');
+    echo "<pre>$output</pre>";
+}
+
 // Helper Function
 function deploy_app($zipName, $targetDir) {
     $sourceZip = "/home/u910898544/domains/msmeloan.sbs/public_html/api/public/$zipName";

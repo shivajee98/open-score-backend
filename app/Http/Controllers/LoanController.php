@@ -977,6 +977,8 @@ class LoanController extends Controller
             LoanRepayment::create([
                 'loan_id' => $loan->id,
                 'amount' => $currentEmiAmount,
+                'emi_number' => $i,
+                'unique_emi_id' => "EMI-{$loan->user_id}-{$loan->id}-{$i}",
                 'due_date' => Carbon::now()->addDays($i * $intervalDays)->toDateString(),
                 'status' => 'PENDING'
             ]);
@@ -993,6 +995,8 @@ class LoanController extends Controller
                 LoanRepayment::create([
                     'loan_id' => $loan->id,
                     'amount' => $finalEmiAmount,
+                    'emi_number' => $totalEmis,
+                    'unique_emi_id' => "EMI-{$loan->user_id}-{$loan->id}-{$totalEmis}",
                     'due_date' => Carbon::now()->addDays($totalDays)->toDateString(),
                     'status' => 'PENDING'
                 ]);
@@ -1274,7 +1278,8 @@ class LoanController extends Controller
     {
         $request->validate([
             'proof_image' => 'required|image|max:10240', // Max 10MB
-            'amount' => 'required|numeric|min:1'
+            'amount' => 'required|numeric|min:1',
+            'transaction_id' => 'nullable|string|max:255'
         ]);
 
         $loan = Loan::findOrFail($loan_id);
@@ -1302,11 +1307,10 @@ class LoanController extends Controller
             $repayment->proof_image = $path;
         }
 
-        // If user says they paid X amount, should we update the repayment amount?
-        // Usually EMI amount is fixed. If they pay less, it's complex.
-        // We assume they pay the EMI amount. 
-        // We can store the user's claimed amount in notes or verified amount later.
-        
+        if ($request->has('transaction_id')) {
+            $repayment->transaction_id = $request->transaction_id;
+        }
+
         $repayment->payment_mode = 'UPI_MANUAL';
         $repayment->status = 'PENDING_VERIFICATION';
         $repayment->submitted_at = now();
@@ -1342,38 +1346,59 @@ class LoanController extends Controller
 
         $repayment = LoanRepayment::findOrFail($repaymentId);
 
-        if ($repayment->status !== 'PENDING_VERIFICATION') {
-            return response()->json(['error' => 'Repayment is not pending verification'], 400);
+        if (!in_array($repayment->status, ['PENDING_VERIFICATION', 'AGENT_APPROVED'])) {
+            return response()->json(['error' => 'Repayment is not in a verifiable state'], 400);
         }
 
         DB::transaction(function () use ($repayment, $user) {
-            $repayment->status = 'PAID';
-            $repayment->paid_at = now();
-            $repayment->collected_by = $user->id; // Verified by
-            $repayment->save();
+            if (in_array($user->role, ['SUPPORT_AGENT', 'SUPPORT'])) {
+                // Agent Level Approval
+                $repayment->status = 'AGENT_APPROVED';
+                $repayment->agent_approved_at = now();
+                $repayment->agent_approved_by = $user->id;
+                $repayment->save();
 
-            $loan = Loan::findOrFail($repayment->loan_id);
-            $loan->increment('paid_amount', $repayment->amount);
-            
-            // Check loan closure
-            $pendingCount = LoanRepayment::where('loan_id', $loan->id)
-                ->where('status', '!=', 'PAID')
-                ->count();
+                DB::table('admin_logs')->insert([
+                    'admin_id' => $user->id,
+                    'action' => 'repayment_agent_approved',
+                    'description' => "Agent pre-approved manual payment for Repayment ID: {$repayment->id}",
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                // Admin Level Final Approval
+                $repayment->status = 'PAID';
+                $repayment->paid_at = now();
+                $repayment->collected_by = $user->id; // Verified by
+                if (!$repayment->agent_approved_at && in_array($user->role, ['ADMIN'])) {
+                    // If Admin approves directly, mark as also agent approved for consistency
+                    $repayment->agent_approved_at = now();
+                    $repayment->agent_approved_by = $user->id;
+                }
+                $repayment->save();
 
-            if ($pendingCount === 0) {
-                $loan->status = 'CLOSED';
-                $loan->closed_at = now();
-                $loan->save();
+                $loan = Loan::findOrFail($repayment->loan_id);
+                $loan->increment('paid_amount', $repayment->amount);
+                
+                // Check loan closure
+                $pendingCount = LoanRepayment::where('loan_id', $loan->id)
+                    ->where('status', '!=', 'PAID')
+                    ->count();
+
+                if ($pendingCount === 0) {
+                    $loan->status = 'CLOSED';
+                    $loan->closed_at = now();
+                    $loan->save();
+                }
+
+                DB::table('admin_logs')->insert([
+                    'admin_id' => $user->id,
+                    'action' => 'repayment_verified',
+                    'description' => "Verified manual payment for Repayment ID: {$repayment->id}",
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
-
-            // Log
-            DB::table('admin_logs')->insert([
-                'admin_id' => $user->id,
-                'action' => 'repayment_verified',
-                'description' => "Verified manual payment for Repayment ID: {$repayment->id}",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
         });
 
         // Notify User
@@ -1440,7 +1465,7 @@ class LoanController extends Controller
         }
 
         $repayments = LoanRepayment::with(['loan.user'])
-            ->where('status', 'PENDING_VERIFICATION')
+            ->whereIn('status', ['PENDING_VERIFICATION', 'AGENT_APPROVED'])
             ->orderBy('updated_at', 'desc')
             ->paginate(50);
 

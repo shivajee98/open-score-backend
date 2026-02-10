@@ -3,6 +3,9 @@
 # Ensure we are in the script's directory
 cd "$(dirname "$0")"
 echo "Changing directory to $(pwd)"
+echo "Clearing caches..."
+php artisan optimize:clear
 echo "Starting migrations..."
 php artisan migrate --force
-echo "Migrations completed!"
+echo " optimizing..."
+php artisan optimize

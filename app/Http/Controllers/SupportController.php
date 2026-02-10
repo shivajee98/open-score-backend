@@ -103,6 +103,7 @@ class SupportController extends Controller
             'issue_type' => 'required|string',
             'message' => 'required|string',
             'priority' => 'in:low,medium,high',
+            'attachment' => 'nullable|file|max:16384', // 16MB
         ]);
 
         if ($validator->fails()) {
@@ -143,11 +144,18 @@ class SupportController extends Controller
             'category_id' => $categoryId,
         ]);
 
+        // Handle attachment upload (screenshot)
+        $attachmentUrl = null;
+        if ($request->hasFile('attachment')) {
+            $attachmentUrl = $request->file('attachment')->store('attachments', 'public');
+        }
+
         // Create initial message
         $msg = TicketMessage::create([
             'support_ticket_id' => $ticket->id,
             'user_id' => Auth::id(),
             'message' => $request->message,
+            'attachment_url' => $attachmentUrl,
             'is_admin_reply' => false,
         ]);
         
