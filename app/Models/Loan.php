@@ -107,9 +107,8 @@ class Loan extends Model
                     $interestRate = (float)$config['interest_rate'];
                 }
 
-                $days = (int)($config['tenure_days'] ?? 30);
-                $months = $days / 30;
-                $totalInterest = round(($amount * $interestRate / 100) * $months);
+                // Interest is a FLAT rate for the entire tenure, not per month
+                $totalInterest = round($amount * $interestRate / 100);
             }
         }
         

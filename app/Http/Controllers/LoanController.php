@@ -295,9 +295,8 @@ class LoanController extends Controller
             }
         }
         
-        // Calculate interest
-        $months = $tenureDays / 30;
-        $totalInterest = round(($amount * $interestRate / 100) * $months);
+        // Interest is a FLAT rate for the entire tenure, not per month
+        $totalInterest = round($amount * $interestRate / 100);
         
         // Calculate GST based on ALL Fees (not just processing)
         $gstRate = $gstRate ?? 18; // Default 18 if not found in config
@@ -897,8 +896,8 @@ class LoanController extends Controller
                 $effectiveRate = $config['interest_rates'][$frequency] ?? ($config['interest_rate'] ?? 0);
                 
                 if ($effectiveRate > 0) {
-                     $months = $config['tenure_days'] / 30;
-                     $interestAmount = ($amount * ($effectiveRate / 100)) * $months;
+                     // Interest is a FLAT rate for the entire tenure, not per month
+                     $interestAmount = round($amount * ($effectiveRate / 100));
                 }
                 
                  
