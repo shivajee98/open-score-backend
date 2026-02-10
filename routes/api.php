@@ -315,6 +315,23 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     return response($output);
 });
 
+// Remote Support Seeder Trigger
+Route::get('/deploy/seed-support', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    $output = "";
+    
+    try {
+        // Run SupportSeeder
+        Artisan::call('db:seed', ['--class' => 'Database\Seeders\SupportSeeder', '--force' => true]);
+        $output .= "Seed Support: " . Artisan::output() . "\n";
+    } catch (\Exception $e) {
+        $output .= "Error: " . $e->getMessage() . "\n";
+    }
+
+    return response($output)->header('Content-Type', 'text/plain');
+});
+
 // Remote Env Update Trigger
 Route::get('/deploy/update-env', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);

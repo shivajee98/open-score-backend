@@ -7,12 +7,16 @@ use App\Models\User;
 use App\Models\Wallet;
 use Illuminate\Support\Str;
 use Database\Seeders\AdminSeeder; // Added this line
+use Database\Seeders\SupportSeeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->call(AdminSeeder::class); // Added this line
+        $this->call([
+            AdminSeeder::class,
+            SupportSeeder::class,
+        ]);
 
         // Admin
         $admin = User::create([
