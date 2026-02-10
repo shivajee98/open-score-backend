@@ -571,10 +571,10 @@ class AdminController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
         
-        $walletId = $user->wallet ? $user->wallet->id : null;
+        $walletId = $targetUser->wallet ? $targetUser->wallet->id : null;
         
         // Loans
-        $loans = \App\Models\Loan::where('user_id', $user->id)
+        $loans = \App\Models\Loan::where('user_id', $targetUser->id)
             ->withCount(['repayments as completed_repayments_count' => function($q) {
                 $q->where('status', 'PAID');
             }])
@@ -622,16 +622,16 @@ class AdminController extends Controller
         
         return response()->json([
             'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'mobile_number' => $user->mobile_number,
-                'email' => $user->email,
-                'role' => $user->role,
-                'status' => $user->status,
-                'business_name' => $user->business_name,
-                'aadhaar_number' => $user->aadhaar_number,
-                'pan_number' => $user->pan_number,
-                'created_at' => $user->created_at,
+                'id' => $targetUser->id,
+                'name' => $targetUser->name,
+                'mobile_number' => $targetUser->mobile_number,
+                'email' => $targetUser->email,
+                'role' => $targetUser->role,
+                'status' => $targetUser->status,
+                'business_name' => $targetUser->business_name,
+                'aadhaar_number' => $targetUser->aadhaar_number,
+                'pan_number' => $targetUser->pan_number,
+                'created_at' => $targetUser->created_at,
                 'wallet_balance' => $walletId ? (float)$this->walletService->getBalance($walletId) : 0
             ],
             'loans' => [
