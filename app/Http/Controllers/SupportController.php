@@ -115,21 +115,27 @@ class SupportController extends Controller
         $categoryId = null;
         $issueType = $request->issue_type;
 
-        $slugMap = [
-            'emi_payment'           => 'transfer_emi_issue',
-            'wallet_topup'          => 'wallet_topup',
-            'services'              => 'services',
-            'cashback_not_received' => 'cashback_issue',
-            'unable_to_transfer'    => 'transfer_emi_issue',
-            'loan'                  => 'loan_kyc_other',
-            'general'               => 'loan_kyc_other', // Default
-        ];
-
-        $targetSlug = $slugMap[$issueType] ?? 'loan_kyc_other';
-
+        // First, try to find category directly by numeric ID or by slug
+        $cat = null;
         if (is_numeric($issueType)) {
             $cat = \App\Models\SupportCategory::find($issueType);
         } else {
+            // Try matching the issue_type directly as a slug (new frontend sends slug)
+            $cat = \App\Models\SupportCategory::where('slug', $issueType)->first();
+        }
+
+        // Legacy fallback: if not found by direct slug, map old issue_type keys
+        if (!$cat) {
+            $slugMap = [
+                'emi_payment'           => 'transfer_emi_issue',
+                'wallet_topup'          => 'wallet_topup',
+                'services'              => 'services',
+                'cashback_not_received' => 'cashback_issue',
+                'unable_to_transfer'    => 'transfer_emi_issue',
+                'loan'                  => 'loan_kyc_other',
+                'general'               => 'loan_kyc_other',
+            ];
+            $targetSlug = $slugMap[$issueType] ?? 'loan_kyc_other';
             $cat = \App\Models\SupportCategory::where('slug', $targetSlug)->first();
         }
 
