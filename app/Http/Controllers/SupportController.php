@@ -234,6 +234,7 @@ class SupportController extends Controller
         $validator = Validator::make($request->all(), [
             'message' => 'required|string',
             'attachment' => 'nullable|file|max:16384', // 16MB file
+            'attachment_label' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -250,6 +251,7 @@ class SupportController extends Controller
             'user_id' => $user->id,
             'message' => $request->message,
             'attachment_url' => $attachmentUrl,
+            'attachment_label' => $request->attachment_label,
             'is_admin_reply' => in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT']),
         ]);
         
@@ -444,5 +446,74 @@ class SupportController extends Controller
             ->paginate(20);
 
         return response()->json($tickets);
+    }
+    // Process specific actions from a support ticket (Wallet, EMI, Fee)
+    public function processTicketAction(Request $request, $id)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $ticket = SupportTicket::findOrFail($id);
+        $action = $request->action; // recharge, emi, platform_fee
+        $amount = $request->amount;
+        $targetId = $request->target_id; // e.g. repayment_id
+
+        if ($user->role === 'SUPPORT_AGENT') {
+            // Agent level: just mark the ticket with intended action and set AGENT_APPROVED
+            $ticket->update([
+                'payment_status' => 'AGENT_APPROVED',
+                'payment_amount' => $amount,
+                'sub_action' => $action, // We'll assume the column will be added soon or use metadata
+                'target_id' => $targetId,
+                'agent_approved_at' => now(),
+                'agent_approved_by' => $user->id,
+            ]);
+
+            return response()->json(['message' => 'Action pre-approved by agent', 'ticket' => $ticket]);
+        } else {
+            // Admin level: Finalize and perform the action
+            return \DB::transaction(function () use ($ticket, $action, $amount, $targetId, $user) {
+                if ($action === 'recharge') {
+                    $customer = $ticket->user;
+                    $customer->increment('wallet_balance', $amount);
+                    
+                    // Create transaction record
+                    \App\Models\Transaction::create([
+                        'user_id' => $customer->id,
+                        'amount' => $amount,
+                        'type' => 'CREDIT',
+                        'source_type' => 'WALLET_RECHARGE',
+                        'status' => 'COMPLETED',
+                        'description' => "Wallet recharge via support ticket #{$ticket->unique_ticket_id}",
+                    ]);
+                } elseif ($action === 'emi') {
+                    $repayment = \App\Models\LoanRepayment::findOrFail($targetId);
+                    $repayment->update([
+                        'status' => 'PAID',
+                        'paid_at' => now(),
+                        'collected_by' => $user->id,
+                    ]);
+
+                    $loan = $repayment->loan;
+                    $loan->increment('paid_amount', $repayment->amount);
+                    
+                    // Closure check
+                    if ($loan->repayments()->where('status', '!=', 'PAID')->count() === 0) {
+                        $loan->update(['status' => 'CLOSED', 'closed_at' => now()]);
+                    }
+                }
+
+                $ticket->update([
+                    'payment_status' => 'ADMIN_APPROVED',
+                    'admin_approved_at' => now(),
+                    'admin_approved_by' => $user->id,
+                    'status' => 'closed'
+                ]);
+
+                return response()->json(['message' => 'Action finalized by admin', 'ticket' => $ticket]);
+            });
+        }
     }
 }

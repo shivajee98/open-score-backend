@@ -16,6 +16,7 @@ class TicketMessage extends Model
         'user_id',
         'message',
         'attachment_url',
+        'attachment_label',
         'is_admin_reply',
     ];
 
