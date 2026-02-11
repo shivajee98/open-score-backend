@@ -141,6 +141,15 @@ class SupportController extends Controller
 
         if ($cat) {
              $categoryId = $cat->id;
+
+             // Auto-assign to the support agent responsible for this category
+             $agent = \App\Models\User::where('role', 'SUPPORT_AGENT')
+                 ->where('support_category_id', $cat->id)
+                 ->where('status', 'ACTIVE')
+                 ->first();
+             if ($agent) {
+                 $assignedTo = $agent->id;
+             }
         }
 
         // Determine if this is a payment ticket
