@@ -110,46 +110,30 @@ class SupportController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Routing Logic
+        // Routing Logic — fully dynamic, no hardcoded category values
         $assignedTo = null;
         $categoryId = null;
         $issueType = $request->issue_type;
 
-        // First, try to find category directly by numeric ID or by slug
+        // Find category by numeric ID or slug (frontend sends slug from /support/categories)
         $cat = null;
         if (is_numeric($issueType)) {
             $cat = \App\Models\SupportCategory::find($issueType);
         } else {
-            // Try matching the issue_type directly as a slug (new frontend sends slug)
             $cat = \App\Models\SupportCategory::where('slug', $issueType)->first();
         }
 
-        // Legacy fallback: if not found by direct slug, map old issue_type keys
-        if (!$cat) {
-            $slugMap = [
-                'emi_payment'           => 'transfer_emi_issue',
-                'wallet_topup'          => 'wallet_topup',
-                'services'              => 'services',
-                'cashback_not_received' => 'cashback_issue',
-                'unable_to_transfer'    => 'transfer_emi_issue',
-                'loan'                  => 'loan_kyc_other',
-                'general'               => 'loan_kyc_other',
-            ];
-            $targetSlug = $slugMap[$issueType] ?? 'loan_kyc_other';
-            $cat = \App\Models\SupportCategory::where('slug', $targetSlug)->first();
-        }
-
         if ($cat) {
-             $categoryId = $cat->id;
+            $categoryId = $cat->id;
 
-             // Auto-assign to the support agent responsible for this category
-             $agent = \App\Models\User::where('role', 'SUPPORT_AGENT')
-                 ->where('support_category_id', $cat->id)
-                 ->where('status', 'ACTIVE')
-                 ->first();
-             if ($agent) {
-                 $assignedTo = $agent->id;
-             }
+            // Auto-assign to the support agent responsible for this category
+            $agent = \App\Models\User::where('role', 'SUPPORT_AGENT')
+                ->where('support_category_id', $cat->id)
+                ->where('status', 'ACTIVE')
+                ->first();
+            if ($agent) {
+                $assignedTo = $agent->id;
+            }
         }
 
         // Determine if this is a payment ticket
