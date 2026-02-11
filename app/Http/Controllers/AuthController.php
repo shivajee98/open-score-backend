@@ -411,6 +411,11 @@ class AuthController extends Controller
         }
         
         $user->append('active_locked_balance');
+        
+        if (in_array($user->role, ['SUPPORT', 'SUPPORT_AGENT'])) {
+            $user->load('supportCategory');
+        }
+
         return response()->json($user);
     }
 
