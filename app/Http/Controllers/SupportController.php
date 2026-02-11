@@ -115,12 +115,21 @@ class SupportController extends Controller
         $categoryId = null;
         $issueType = $request->issue_type;
 
-        // Find category by numeric ID or slug (frontend sends slug from /support/categories)
         $cat = null;
         if (is_numeric($issueType)) {
             $cat = \App\Models\SupportCategory::find($issueType);
+            \Log::info("Ticket Routing: Received numeric ID: $issueType. Found Category: " . ($cat ? $cat->name : 'NONE'));
         } else {
+            // Attempt to find by slug as provided
             $cat = \App\Models\SupportCategory::where('slug', $issueType)->first();
+            
+            // Fallback: If not found, try replacing hyphens with underscores or vice versa
+            if (!$cat) {
+                 $altSlug = str_contains($issueType, '-') ? str_replace('-', '_', $issueType) : str_replace('_', '-', $issueType);
+                 $cat = \App\Models\SupportCategory::where('slug', $altSlug)->first();
+            }
+            
+            \Log::info("Ticket Routing: Received slug: $issueType. Found Category: " . ($cat ? $cat->name : 'NONE'));
         }
 
         if ($cat) {
@@ -131,14 +140,31 @@ class SupportController extends Controller
                 ->where('support_category_id', $cat->id)
                 ->where('status', 'ACTIVE')
                 ->first();
+            
             if ($agent) {
                 $assignedTo = $agent->id;
+                \Log::info("Ticket Routing: Successfully assigned to Agent #$assignedTo ({$agent->name}) for Category #$categoryId");
+            } else {
+                \Log::warning("Ticket Routing: No active agent found for Category #$categoryId ({$cat->name})");
             }
+        } else {
+            \Log::error("Ticket Routing: Critical - No category found for issue_type: $issueType. Defaulting assignment to null.");
         }
 
         // Determine if this is a payment ticket
-        $paymentIssueTypes = ['emi_payment', 'wallet_topup', 'services'];
-        $isPaymentTicket = in_array($issueType, $paymentIssueTypes);
+        // Use both issueType slug and category slug for checking
+        $paymentKeywords = ['emi', 'wallet', 'transfer', 'recharge', 'payment', 'fee'];
+        $isPaymentTicket = false;
+        
+        $checkString = strtolower($issueType . ($cat ? $cat->slug : ''));
+        foreach ($paymentKeywords as $kw) {
+            if (str_contains($checkString, $kw)) {
+                $isPaymentTicket = true;
+                break;
+            }
+        }
+        
+        \Log::info("Ticket Routing: isPaymentTicket=" . ($isPaymentTicket ? 'true' : 'false'));
 
         $ticket = SupportTicket::create([
             'user_id' => Auth::id(),
