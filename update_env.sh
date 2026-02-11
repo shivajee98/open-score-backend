@@ -32,6 +32,20 @@ update_key "FCM_SENDER_ID" "484983197738"
 update_key "FCM_VAPID_PUBLIC_KEY" "BHvmCGQ_Ro9oPKZ7VZTf9TEP9Q_ZaPMcF0U-kvKiufXRbVMp-DuqIvnP8Q9BMGHRT03NJNi2w0Qlpo9OTMj5xVQ"
 
 # KYC URL Update
+# KYC URL Update
 update_key "KYC_FORM_URL" "https://kyc.msmeloan.sbs"
+
+# Reverb Configuration
+update_key "BROADCAST_CONNECTION" "reverb"
+update_key "REVERB_APP_ID" "101010"
+update_key "REVERB_APP_KEY" "openscore_app_key"
+update_key "REVERB_APP_SECRET" "openscore_app_secret"
+update_key "REVERB_HOST" "api.msmeloan.sbs"
+update_key "REVERB_PORT" "443"
+update_key "REVERB_SCHEME" "https"
+update_key "VITE_REVERB_APP_KEY" "openscore_app_key"
+update_key "VITE_REVERB_HOST" "api.msmeloan.sbs"
+update_key "VITE_REVERB_PORT" "443"
+update_key "VITE_REVERB_SCHEME" "https"
 
 echo "Environment variables update complete."

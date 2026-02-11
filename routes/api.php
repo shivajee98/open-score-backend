@@ -172,6 +172,12 @@ Route::middleware('auth:api,sub-user')->group(function () {
     Route::post('/admin/support/tickets/{id}/process-action', [SupportController::class, 'processTicketAction']);
     Route::post('/admin/support/tickets/{id}/reject-payment', [SupportController::class, 'rejectTicketPayment']);
 
+    // Voice Call Signaling
+    Route::post('/call/initiate', [\App\Http\Controllers\CallController::class, 'initiate']);
+    Route::post('/call/answer', [\App\Http\Controllers\CallController::class, 'answer']);
+    Route::post('/call/ice-candidate', [\App\Http\Controllers\CallController::class, 'iceCandidate']);
+    Route::post('/call/end', [\App\Http\Controllers\CallController::class, 'end']);
+
     // Admin Support Categories & Agents
     Route::get('/admin/support/categories', [\App\Http\Controllers\Admin\SupportAgentController::class, 'indexCategories']);
     Route::post('/admin/support/categories', [\App\Http\Controllers\Admin\SupportAgentController::class, 'storeCategory']);
