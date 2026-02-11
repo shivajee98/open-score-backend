@@ -74,12 +74,12 @@ class WalletController extends Controller
         }
 
         $transactions->getCollection()->transform(function ($tx) use ($wallets, $users) {
-            // Default values
-            $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Cashback' : 'OpenScore';
-            $tx->counterparty_vpa = 'Open Score';
-
+            // Enhanced labeling based on source_type
             if ($tx->source_type === 'QR_PAYMENT' && $tx->source_id) {
-                // source_id is now the Counterparty Wallet ID
+                // Default fallback if counterparty wallet/user not found
+                $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Received Payment' : 'Sent Payment';
+                $tx->counterparty_vpa = 'Wallet Transfer';
+                
                 if (isset($wallets[$tx->source_id])) {
                     $counterpartyWallet = $wallets[$tx->source_id];
                     if (isset($users[$counterpartyWallet->user_id])) {
@@ -90,15 +90,24 @@ class WalletController extends Controller
                 }
             } elseif ($tx->source_type === 'LOAN') {
                 if ($tx->type === 'CREDIT') {
-                    // Show "Loan Disbursed" only after admin releases funds (COMPLETED)
-                    // Show "Loan Processing" while pending release
                     $tx->counterparty_name = $tx->status === 'COMPLETED' ? 'Loan Disbursed' : 'Loan Processing';
                 } else {
                     $tx->counterparty_name = 'Loan Repayment';
                 }
+                $tx->counterparty_vpa = 'Open Score';
             } elseif ($tx->source_type === 'ADMIN_CREDIT') {
-                $tx->counterparty_name = 'Open Score';
+                $tx->counterparty_name = 'System Credit';
                 $tx->counterparty_vpa = 'support@openscore';
+            } elseif ($tx->source_type === 'TICKET' || $tx->source_type === 'CASHBACK') {
+                $tx->counterparty_name = 'Wallet Recharge';
+                $tx->counterparty_vpa = 'Open Score';
+            } elseif ($tx->source_type === 'PLATFORM_FEE') {
+                $tx->counterparty_name = 'Platform Fee';
+                $tx->counterparty_vpa = 'Open Score';
+            } else {
+                // Absolute fallback
+                $tx->counterparty_name = $tx->type === 'CREDIT' ? 'Cashback' : 'OpenScore';
+                $tx->counterparty_vpa = 'Open Score';
             }
 
             return $tx;
