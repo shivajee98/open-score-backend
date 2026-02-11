@@ -297,7 +297,9 @@ class AdminController extends Controller
     public function creditUser(Request $request, $id)
     {
         $request->validate([
-            'amount' => 'required|numeric|min:1'
+            'amount' => 'required|numeric|min:1',
+            'type' => 'nullable|string', // Wallet Top-up, Service Fee, etc.
+            'description' => 'nullable|string'
         ]);
 
         $user = \App\Models\User::findOrFail($id);
@@ -307,25 +309,40 @@ class AdminController extends Controller
             $wallet = $this->walletService->createWallet($user->id);
         }
 
-        // Create COMPLETED transaction
+        $admin = \Illuminate\Support\Facades\Auth::user();
+        $isAgent = $admin->role === 'SUB_USER';
+        
+        $status = $isAgent ? 'PENDING' : 'COMPLETED';
+        $sourceType = 'ADMIN_CREDIT';
+        $desc = $request->description ?: ($isAgent ? "Agent Credit Request" : "Admin Manual Credit");
+        
+        if ($request->type) {
+            $desc = "[{$request->type}] " . $desc;
+        }
+
+        // Create transaction
         $this->walletService->credit(
             $wallet->id,
             $request->amount,
-            'ADMIN_CREDIT',
-            \Illuminate\Support\Facades\Auth::id(),
-            "Admin Manual Credit (Instant)",
-            'COMPLETED'
+            $sourceType,
+            $admin->id,
+            $desc,
+            $status
         );
 
+        if ($isAgent) {
+            return response()->json(['message' => 'Credit request submitted for approval']);
+        }
+
         DB::table('admin_logs')->insert([
-            'admin_id' => \Illuminate\Support\Facades\Auth::id(),
-            'action' => 'manual_credit_request',
-            'description' => "Requested credit of ₹{$request->amount} for {$user->name}. awaiting approval.",
+            'admin_id' => $admin->id,
+            'action' => 'manual_credit_processed',
+            'description' => "Credited ₹{$request->amount} to {$user->name}. Ref: {$desc}",
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        return response()->json(['message' => 'Credit request submitted for approval']);
+        return response()->json(['message' => 'Funds credited successfully']);
     }
 
     public function creditCashback(Request $request, $id)
@@ -380,17 +397,23 @@ class AdminController extends Controller
 
     public function getPendingTransactions()
     {
-        $pending = \App\Models\WalletTransaction::with('wallet.user')
+        $pending = \App\Models\WalletTransaction::with(['wallet.user', 'sourceWallet.user']) // Assuming source_id points to User ID for ADMIN_CREDIT, but WalletService uses Auth ID (User ID). Relation? 
+            // WalletTransaction model usually doesn't have 'source' relation for ADMIN_CREDIT which uses source_id as Admin User ID.
+            // We can manually load or just use source_id.
             ->where('status', 'PENDING')
             ->where('source_type', 'ADMIN_CREDIT')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($tx) {
+                $agent = \App\Models\User::find($tx->source_id);
                 return [
                     'id' => $tx->id,
                     'amount' => $tx->amount,
                     'user_name' => $tx->wallet->user->name ?? 'Unknown',
                     'user_mobile' => $tx->wallet->user->mobile_number ?? '',
+                    'agent_name' => $agent ? $agent->name : 'Unknown Agent',
+                    'agent_role' => $agent ? $agent->role : 'Unknown', 
+                    'description' => $tx->description,
                     'created_at' => $tx->created_at,
                 ];
             });

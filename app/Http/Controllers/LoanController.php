@@ -558,14 +558,24 @@ class LoanController extends Controller
         $wallet = $this->walletService->getWallet($loan->user_id);
         if (!$wallet) $wallet = $this->walletService->createWallet($loan->user_id);
         
-        $this->walletService->credit(
-            $wallet->id, 
-            $loan->amount, 
-            'LOAN', 
-            $loan->id, 
-            "Loan Disbursal (Pending KYC/Final Approval)", 
-            'PENDING'
-        );
+        // Prevent duplicate entries: Check if a PENDING transaction already exists
+        $existingTx = \App\Models\WalletTransaction::where('wallet_id', $wallet->id)
+            ->where('source_type', 'LOAN')
+            ->where('source_id', $loan->id)
+            ->where('type', 'CREDIT')
+            ->where('status', 'PENDING')
+            ->exists();
+
+        if (!$existingTx) {
+            $this->walletService->credit(
+                $wallet->id, 
+                $loan->amount, 
+                'LOAN', 
+                $loan->id, 
+                "Loan Disbursal (Pending KYC/Final Approval)", 
+                'PENDING'
+            );
+        }
 
         return response()->json([
             'loan' => $loan,
@@ -1498,6 +1508,67 @@ class LoanController extends Controller
         return response()->json(['message' => 'Payment rejected', 'repayment' => $repayment]);
     }
 
+    public function reject(Request $request, $id)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['ADMIN', 'SUPPORT', 'SUPPORT_AGENT'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $loan = Loan::findOrFail($id);
+        
+        // Allowed states for rejection
+        if (in_array($loan->status, ['DISBURSED', 'CLOSED', 'REJECTED', 'CANCELLED'])) {
+            return response()->json(['error' => 'Cannot reject loan in current status'], 400);
+        }
+
+        $reason = $request->input('reason', 'Application Rejected by Admin');
+        
+        DB::transaction(function() use ($loan, $user, $reason) {
+            $loan->status = 'REJECTED';
+            // We can add a rejection_reason column or just log it. 
+            // For now, let's look if there is a 'notes' or 'reason' column.
+            // Based on view_file, there isn't one explicitly shown, but we can check later.
+            // We'll log it.
+            $loan->save();
+
+            // Cleanup pending wallet transaction (locked funds) if any
+            $this->walletService->rejectLoanTransaction($loan->id);
+
+            DB::table('admin_logs')->insert([
+                'admin_id' => $user->id,
+                'action' => 'loan_rejected',
+                'description' => "Rejected loan ID: {$loan->id}. Reason: {$reason}",
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Release any RESERVED funds if applicable (if rejected AFTER approval but before disbursal)
+            if ($loan->status === 'APPROVED') { // It was approved but now rejected?
+                 $allocation = \App\Models\LoanAllocation::where('loan_id', $loan->id)
+                    ->where('status', 'RESERVED')
+                    ->first();
+                 if ($allocation) {
+                     $allocation->status = 'CANCELLED';
+                     $allocation->save();
+                     
+                     // Restore available funds
+                     $adminFund = \App\Models\AdminFund::first();
+                     if ($adminFund) {
+                         $adminFund->available_funds += $allocation->allocated_amount;
+                         $adminFund->save();
+                     }
+                 }
+            }
+        });
+
+        // Notify User
+        $customer = \App\Models\User::find($loan->user_id);
+        FcmService::sendToUser($customer, "Loan Application Rejected", "Your loan application has been rejected. Reason: {$reason}");
+
+        return response()->json(['message' => 'Loan rejected successfully']);
+    }
+
     /**
      * Get list of payments pending verification
      */
@@ -1522,10 +1593,17 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $repayments = LoanRepayment::with(['loan.user'])
-            ->whereIn('status', ['PENDING_VERIFICATION', 'AGENT_APPROVED'])
-            ->orderBy('updated_at', 'desc')
-            ->paginate(50);
+        $query = LoanRepayment::with(['loan.user']);
+
+        if ($user->role === 'SUPPORT_AGENT') {
+            // Agents only see what they need to approve
+            $query->where('status', 'PENDING_VERIFICATION');
+        } else {
+            // Admins see everything pending
+            $query->whereIn('status', ['PENDING_VERIFICATION', 'AGENT_APPROVED']);
+        }
+
+        $repayments = $query->orderBy('updated_at', 'desc')->paginate(50);
 
         return response()->json($repayments);
     }

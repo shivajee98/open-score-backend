@@ -66,6 +66,7 @@ Route::middleware('auth:api,sub-user')->group(function () {
     Route::post('/admin/loans/repayments/{id}/manual-collect', [LoanController::class, 'manualCollect']); // New
     Route::post('/admin/loans/repayments/{id}/approve', [LoanController::class, 'approveManualCollect']); // New
     Route::post('/admin/loans/{id}/close', [LoanController::class, 'closeManually']);
+    Route::post('/admin/loans/{id}/reject', [LoanController::class, 'reject']);
     Route::delete('/admin/loans/{id}', [LoanController::class, 'destroy']);
     
     // Manual Repayment (User)
