@@ -399,7 +399,8 @@ class SupportController extends Controller
             $ticket->status = 'closed';
             $ticket->save();
 
-            // Finalize Loan Repayment if it's an EMI action
+            // Execute Actions based on sub_action
+            // 1. EMI Repayment
             if ($ticket->sub_action === 'emi' && $ticket->target_id) {
                 $repayment = \App\Models\LoanRepayment::find($ticket->target_id);
                 if ($repayment && $repayment->status !== 'PAID') {
@@ -418,12 +419,50 @@ class SupportController extends Controller
                         }
                     }
                 }
+            } 
+            // 2. Wallet Recharge (Topup)
+            elseif ($ticket->sub_action === 'recharge' || $ticket->sub_action === 'wallet_topup') {
+                $customer = $ticket->user;
+                $wallet = $customer->wallet;
+                if (!$wallet) {
+                     $wallet = \App\Models\Wallet::create([
+                        'user_id' => $customer->id,
+                         'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                         'status' => 'ACTIVE'
+                     ]);
+                }
+
+                \App\Models\WalletTransaction::create([
+                    'wallet_id' => $wallet->id,
+                    'amount' => $ticket->payment_amount,
+                    'type' => 'CREDIT',
+                    'source_type' => 'TICKET',
+                    'source_id' => $ticket->id,
+                    'status' => 'COMPLETED',
+                    'description' => "Wallet recharge (₹{$ticket->payment_amount}) via ticket #{$ticket->unique_ticket_id}",
+                ]);
+            }
+            // 3. Platform/Service Fee
+            elseif ($ticket->sub_action === 'platform_fee' || $ticket->sub_action === 'service_fee') {
+                $customer = $ticket->user;
+                $wallet = $customer->wallet;
+                if ($wallet) {
+                    \App\Models\WalletTransaction::create([
+                        'wallet_id' => $wallet->id,
+                        'amount' => $ticket->payment_amount,
+                        'type' => 'CREDIT',
+                        'source_type' => 'PLATFORM_FEE',
+                        'source_id' => $ticket->id,
+                        'status' => 'COMPLETED',
+                        'description' => "Platform fee payment (₹{$ticket->payment_amount}) via ticket #{$ticket->unique_ticket_id}",
+                    ]);
+                }
             }
 
             \DB::table('admin_logs')->insert([
                 'admin_id' => $user->id,
                 'action' => 'ticket_payment_admin_approved',
-                'description' => "Admin approved payment ticket #{$ticket->unique_ticket_id} for ₹{$ticket->payment_amount}",
+                'description' => "Admin approved payment ticket #{$ticket->unique_ticket_id} for ₹{$ticket->payment_amount} ({$ticket->sub_action})",
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);

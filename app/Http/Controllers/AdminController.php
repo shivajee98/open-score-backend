@@ -353,7 +353,7 @@ class AdminController extends Controller
 
         if ($isSupportAgent) {
              $category = $admin->supportCategory;
-             if (!$category || $category->slug !== 'cashback_issue') {
+             if (!$category || (!str_contains(strtolower($category->slug), 'cashback') && !str_contains(strtolower($category->slug), 'wallet'))) {
                  $hasCashbackPermission = false;
              }
         }
@@ -374,34 +374,66 @@ class AdminController extends Controller
             $wallet = $this->walletService->createWallet($user->id);
         }
 
-        // Create COMPLETED transaction for Cashback
-        $this->walletService->credit(
-            $wallet->id,
-            $request->amount,
-            'CASHBACK',
-            $admin->id,
-            $request->description,
-            'COMPLETED'
-        );
+        if ($isSupportAgent) {
+            // Agent: Create PENDING transaction
+            $this->walletService->credit(
+                $wallet->id,
+                $request->amount,
+                'CASHBACK',
+                $admin->id,
+                $request->description,
+                'PENDING'
+            );
+            return response()->json(['message' => 'Cashback request submitted for approval']);
+        } else {
+            // Admin: Immediate Execution
+            DB::transaction(function() use ($wallet, $request, $admin) {
+                // 1. Credit User
+                $this->walletService->credit(
+                    $wallet->id,
+                    $request->amount,
+                    'CASHBACK',
+                    $admin->id,
+                    $request->description,
+                    'COMPLETED'
+                );
 
-        DB::table('admin_logs')->insert([
-            'admin_id' => $admin->id,
-            'action' => 'cashback_disbursed',
-            'description' => "Disbursed cashback of ₹{$request->amount} for {$user->name}. Reason: {$request->description}",
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+                // 2. Debit System (Global Tracking)
+                $systemWallet = $this->walletService->getSystemWallet();
+                $this->walletService->systemDebit(
+                    $systemWallet->id,
+                    $request->amount,
+                    'CASHBACK',
+                    $wallet->id, // Source ID is User Wallet (Destination context) or Admin ID? Usually User Wallet ID to link
+                    "Cashback Disbursed to {$wallet->user->name}"
+                );
 
-        return response()->json(['message' => 'Cashback credited successfully']);
+                // 3. Reduce Admin Fund (Available to Lend)
+                $fund = \App\Models\AdminFund::first();
+                if ($fund) {
+                    $fund->total_funds -= $request->amount;
+                    if ($fund->total_funds < 0) $fund->total_funds = 0; // Prevent negative
+                    $fund->save();
+                }
+
+                DB::table('admin_logs')->insert([
+                    'admin_id' => $admin->id,
+                    'action' => 'cashback_disbursed',
+                    'description' => "Disbursed cashback of ₹{$request->amount} for {$wallet->user->name}. Reason: {$request->description}",
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
+
+            return response()->json(['message' => 'Cashback credited successfully']);
+        }
     }
 
     public function getPendingTransactions()
     {
-        $pending = \App\Models\WalletTransaction::with(['wallet.user', 'sourceWallet.user']) // Assuming source_id points to User ID for ADMIN_CREDIT, but WalletService uses Auth ID (User ID). Relation? 
-            // WalletTransaction model usually doesn't have 'source' relation for ADMIN_CREDIT which uses source_id as Admin User ID.
-            // We can manually load or just use source_id.
+        $pending = \App\Models\WalletTransaction::with(['wallet.user'])
             ->where('status', 'PENDING')
-            ->where('source_type', 'ADMIN_CREDIT')
+            ->whereIn('source_type', ['ADMIN_CREDIT', 'CASHBACK'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($tx) {
@@ -414,6 +446,7 @@ class AdminController extends Controller
                     'agent_name' => $agent ? $agent->name : 'Unknown Agent',
                     'agent_role' => $agent ? $agent->role : 'Unknown', 
                     'description' => $tx->description,
+                    'type' => $tx->source_type, // wallet topup vs cashback
                     'created_at' => $tx->created_at,
                 ];
             });
@@ -424,15 +457,59 @@ class AdminController extends Controller
     public function approveFund($id)
     {
         try {
-            $this->walletService->approveTransaction($id);
-            
-            DB::table('admin_logs')->insert([
-                'admin_id' => \Illuminate\Support\Facades\Auth::id(),
-                'action' => 'fund_approved',
-                'description' => "Approved fund transaction ID: {$id}",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            DB::transaction(function() use ($id) {
+                $tx = \App\Models\WalletTransaction::with('wallet.user')->lockForUpdate()->findOrFail($id);
+                
+                if ($tx->status !== 'PENDING') {
+                    throw new \Exception("Transaction is not pending");
+                }
+
+                // If CASHBACK, we need to Deduct from Admin Fund and Debit System
+                if ($tx->source_type === 'CASHBACK') {
+                    // Debit System
+                    $systemWallet = $this->walletService->getSystemWallet();
+                    $this->walletService->systemDebit(
+                        $systemWallet->id,
+                        $tx->amount,
+                        'CASHBACK',
+                        $tx->wallet_id,
+                        "Approved Cashback for {$tx->wallet->user->name}"
+                    );
+
+                    // Reduce Admin Fund
+                    $fund = \App\Models\AdminFund::first();
+                    if ($fund) {
+                        $fund->total_funds -= $tx->amount;
+                        if ($fund->total_funds < 0) $fund->total_funds = 0;
+                        $fund->save();
+                    }
+                }
+                
+                // For ADMIN_CREDIT (Add Funds), arguably it comes from "Outside", so we don't Debit System?
+                // Or if we treat "Add Funds" as "System Injection"? 
+                // Usually "Add Funds" means User deposited cash/bank transfer.
+                // So System Wallet doesn't lose money. System Wallet might GAIN money if we tracked that.
+                // But here we are CREDITING User.
+                // If we Credit User without Debiting System, we are minting money.
+                // But AdminFund tracks "Capital Pool".
+                // User Wallet Balance is Liability (We owe them). 
+                // AdminFund is Asset (Cash on Hand).
+                // If User deposits 10k: AdminFund +10k (Cash), User Wallet +10k (Liability).
+                // So "Add Funds" should probably INCREASE AdminFund?
+                // But the `addFunds` method (line 49) handles adding to Capital Pool manually.
+                
+                // Let's stick to user request: "reduce the funds from the available to lend as the money gets more in to disbursal and cashback"
+                
+                $this->walletService->approveTransaction($id);
+                
+                DB::table('admin_logs')->insert([
+                    'admin_id' => \Illuminate\Support\Facades\Auth::id(),
+                    'action' => 'fund_approved',
+                    'description' => "Approved fund transaction ID: {$id} ({$tx->source_type})",
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            });
 
             return response()->json(['message' => 'Funds approved successfully']);
         } catch (\Exception $e) {
