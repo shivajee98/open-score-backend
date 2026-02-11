@@ -577,6 +577,16 @@ class LoanController extends Controller
             );
         }
 
+        // Send Notification to User
+        $customer = \App\Models\User::find($loan->user_id);
+        if ($customer) {
+            \App\Services\FcmService::sendToUser(
+                $customer, 
+                "KYC Verification Required 🛡️", 
+                "Please complete your KYC to proceed with your loan application. Link is available in your chat."
+            );
+        }
+
         return response()->json([
             'loan' => $loan,
             'kyc_link' => env('KYC_FORM_URL', 'https://kyc.msmeloan.sbs') . "/form?token={$loan->kyc_token}"
