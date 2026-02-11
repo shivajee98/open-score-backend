@@ -9,8 +9,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('support_tickets', function (Blueprint $table) {
-            $table->string('sub_action')->nullable()->comment('recharge, emi, platform_fee');
-            $table->unsignedBigInteger('target_id')->nullable()->comment('repayment_id if emi');
+            if (!Schema::hasColumn('support_tickets', 'sub_action')) {
+                $table->string('sub_action')->nullable()->comment('recharge, emi, platform_fee');
+            }
+            if (!Schema::hasColumn('support_tickets', 'target_id')) {
+                $table->unsignedBigInteger('target_id')->nullable()->comment('repayment_id if emi');
+            }
         });
     }
 

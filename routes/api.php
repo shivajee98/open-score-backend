@@ -315,20 +315,23 @@ Route::get('/deploy/migrate', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
     
     $output = "";
+    $phpPath = '/opt/alt/php84/usr/bin/php';
     
-    Artisan::call('migrate', ['--force' => true]);
-    $output .= "Migrate: " . Artisan::output() . "\n";
+    $output .= "Running Migrations...\n";
+    $cmd = "{$phpPath} " . base_path('artisan') . " migrate --force 2>&1";
+    $output .= "Cmd: {$cmd}\n";
+    $output .= shell_exec($cmd) . "\n";
     
-    Artisan::call('route:clear');
-    $output .= "Route Clear: " . Artisan::output() . "\n";
+    $output .= "Clearing Routes...\n";
+    shell_exec("{$phpPath} " . base_path('artisan') . " route:clear 2>&1");
     
-    Artisan::call('config:clear');
-    $output .= "Config Clear: " . Artisan::output() . "\n";
+    $output .= "Clearing Config...\n";
+    shell_exec("{$phpPath} " . base_path('artisan') . " config:clear 2>&1");
 
-    Artisan::call('storage:link');
-    $output .= "Storage Link: " . Artisan::output() . "\n";
+    $output .= "Storage Link...\n";
+    shell_exec("{$phpPath} " . base_path('artisan') . " storage:link 2>&1");
     
-    return response($output);
+    return response($output)->header('Content-Type', 'text/plain');
 });
 
 // Remote Support Seeder Trigger
@@ -338,9 +341,10 @@ Route::get('/deploy/seed-support', function(Illuminate\Http\Request $request) {
     $output = "";
     
     try {
-        // Run SupportSeeder
-        Artisan::call('db:seed', ['--class' => 'Database\Seeders\SupportSeeder', '--force' => true]);
-        $output .= "Seed Support: " . Artisan::output() . "\n";
+        $phpPath = '/opt/alt/php84/usr/bin/php';
+        $cmd = "{$phpPath} " . base_path('artisan') . " db:seed --class=Database\\\\Seeders\\\\SupportSeeder --force 2>&1";
+        $output .= "Cmd: {$cmd}\n";
+        $output .= shell_exec($cmd) . "\n";
     } catch (\Exception $e) {
         $output .= "Error: " . $e->getMessage() . "\n";
     }
@@ -353,10 +357,11 @@ Route::get('/deploy/update-env', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
     
     $envPath = base_path('.env');
+    $phpPath = '/opt/alt/php84/usr/bin/php';
     $output = shell_exec("bash " . base_path('update_env.sh') . " {$envPath} 2>&1");
     
-    Artisan::call('config:clear');
-    $output .= "\nConfig Clear: " . Artisan::output() . "\n";
+    shell_exec("{$phpPath} " . base_path('artisan') . " config:clear 2>&1");
+    $output .= "\nConfig Clear complete.\n";
     
     return response($output)->header('Content-Type', 'text/plain');
 });

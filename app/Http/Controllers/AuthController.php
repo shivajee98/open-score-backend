@@ -501,8 +501,8 @@ class AuthController extends Controller
         ]);
 
         $user = \App\Models\User::where('mobile_number', $request->mobile_number)
-            ->where('role', 'SUPPORT_AGENT')
-            ->first();
+        ->whereIn('role', ['SUPPORT', 'SUPPORT_AGENT'])
+        ->first();
 
         if (!$user || !\Illuminate\Support\Facades\Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Invalid credentials'], 401);
