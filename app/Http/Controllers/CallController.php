@@ -22,7 +22,7 @@ class CallController extends Controller
             'to' => 'required|exists:users,id'
         ]);
 
-        $caller = Auth::user();
+        $caller = Auth::guard('api')->user();
         $receiverId = $request->to;
         
         // Broadcast event to receiver
