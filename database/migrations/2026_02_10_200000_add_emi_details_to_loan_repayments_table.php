@@ -11,15 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('loan_repayments', function (Blueprint $table) {
-            $table->integer('emi_number')->nullable()->after('loan_id');
-            $table->string('unique_emi_id')->nullable()->unique()->after('emi_number');
-            $table->string('transaction_id')->nullable()->after('amount');
-            $table->timestamp('agent_approved_at')->nullable()->after('status');
-            $table->unsignedBigInteger('agent_approved_by')->nullable()->after('agent_approved_at');
-            
-            $table->foreign('agent_approved_by')->references('id')->on('users')->onDelete('set null');
-        });
+        // Columns already exist
     }
 
     /**

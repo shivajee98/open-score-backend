@@ -25,6 +25,8 @@ class SupportTicket extends Model
         'admin_approved_at',
         'admin_approved_by',
         'rejection_reason',
+        'sub_action',
+        'target_id',
     ];
 
     protected $appends = ['display_id'];

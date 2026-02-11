@@ -176,6 +176,8 @@ class SupportController extends Controller
             'priority' => $request->priority ?? 'medium',
             'assigned_to' => $assignedTo,
             'category_id' => $categoryId,
+            'sub_action' => $request->sub_action,
+            'target_id' => $request->target_id,
         ]);
 
         // Auto-generate unique_ticket_id for payment tickets
@@ -362,6 +364,18 @@ class SupportController extends Controller
             $ticket->agent_approved_by = $user->id;
             $ticket->save();
 
+            // Automatic Loan Repayment status update
+            if ($ticket->sub_action === 'emi' && $ticket->target_id) {
+                $repayment = \App\Models\LoanRepayment::find($ticket->target_id);
+                if ($repayment) {
+                    $repayment->update([
+                        'agent_approved_at' => now(),
+                        'agent_approved_by' => $user->id,
+                        // Not changing status to PAID yet, just marking as verified
+                    ]);
+                }
+            }
+
             \DB::table('admin_logs')->insert([
                 'admin_id' => $user->id,
                 'action' => 'ticket_payment_agent_approved',
@@ -384,6 +398,27 @@ class SupportController extends Controller
 
             $ticket->status = 'closed';
             $ticket->save();
+
+            // Finalize Loan Repayment if it's an EMI action
+            if ($ticket->sub_action === 'emi' && $ticket->target_id) {
+                $repayment = \App\Models\LoanRepayment::find($ticket->target_id);
+                if ($repayment && $repayment->status !== 'PAID') {
+                    $repayment->update([
+                        'status' => 'PAID',
+                        'paid_at' => now(),
+                        'collected_by' => $user->id,
+                    ]);
+
+                    $loan = $repayment->loan;
+                    if ($loan) {
+                        $loan->increment('paid_amount', $repayment->amount);
+                        // Closure check
+                        if ($loan->repayments()->where('status', '!=', 'PAID')->count() === 0) {
+                            $loan->update(['status' => 'CLOSED', 'closed_at' => now()]);
+                        }
+                    }
+                }
+            }
 
             \DB::table('admin_logs')->insert([
                 'admin_id' => $user->id,
@@ -503,17 +538,27 @@ class SupportController extends Controller
             return \DB::transaction(function () use ($ticket, $action, $amount, $targetId, $user) {
                 if ($action === 'recharge') {
                     $customer = $ticket->user;
-                    $customer->increment('wallet_balance', $amount);
+                    $wallet = $customer->wallet;
+                    
+                    if (!$wallet) {
+                        $wallet = \App\Models\Wallet::create([
+                            'user_id' => $customer->id,
+                            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                            'status' => 'ACTIVE'
+                        ]);
+                    }
                     
                     // Create transaction record
-                    \App\Models\Transaction::create([
-                        'user_id' => $customer->id,
+                    \App\Models\WalletTransaction::create([
+                        'wallet_id' => $wallet->id,
                         'amount' => $amount,
                         'type' => 'CREDIT',
-                        'source_type' => 'WALLET_RECHARGE',
+                        'source_type' => 'TICKET',
+                        'source_id' => $ticket->id,
                         'status' => 'COMPLETED',
-                        'description' => "Wallet recharge via support ticket #{$ticket->unique_ticket_id}",
+                        'description' => "Wallet recharge (₹{$amount}) via ticket #{$ticket->unique_ticket_id}",
                     ]);
+
                 } elseif ($action === 'emi') {
                     $repayment = \App\Models\LoanRepayment::findOrFail($targetId);
                     $repayment->update([
@@ -523,11 +568,27 @@ class SupportController extends Controller
                     ]);
 
                     $loan = $repayment->loan;
-                    $loan->increment('paid_amount', $repayment->amount);
+                    if ($loan) {
+                        $loan->increment('paid_amount', $repayment->amount);
+                        // Closure check
+                        if ($loan->repayments()->where('status', '!=', 'PAID')->count() === 0) {
+                            $loan->update(['status' => 'CLOSED', 'closed_at' => now()]);
+                        }
+                    }
+                } elseif ($action === 'platform_fee') {
+                    $customer = $ticket->user;
+                    $wallet = $customer->wallet;
                     
-                    // Closure check
-                    if ($loan->repayments()->where('status', '!=', 'PAID')->count() === 0) {
-                        $loan->update(['status' => 'CLOSED', 'closed_at' => now()]);
+                    if ($wallet) {
+                        \App\Models\WalletTransaction::create([
+                            'wallet_id' => $wallet->id,
+                            'amount' => $amount,
+                            'type' => 'CREDIT',
+                            'source_type' => 'PLATFORM_FEE',
+                            'source_id' => $ticket->id,
+                            'status' => 'COMPLETED',
+                            'description' => "Platform fee payment (₹{$amount}) via ticket #{$ticket->unique_ticket_id}",
+                        ]);
                     }
                 }
 
@@ -535,7 +596,10 @@ class SupportController extends Controller
                     'payment_status' => 'ADMIN_APPROVED',
                     'admin_approved_at' => now(),
                     'admin_approved_by' => $user->id,
-                    'status' => 'closed'
+                    'status' => 'closed',
+                    'sub_action' => $action,
+                    'payment_amount' => $amount,
+                    'target_id' => $targetId
                 ]);
 
                 return response()->json(['message' => 'Action finalized by admin', 'ticket' => $ticket]);
