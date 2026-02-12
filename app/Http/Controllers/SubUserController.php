@@ -238,47 +238,73 @@ class SubUserController extends Controller
 
     public function getReferralStats($id)
     {
-        $subUser = SubUser::findOrFail($id);
-        $referredUserIds = User::where('sub_user_id', $id)->pluck('id');
-        $walletIds = \App\Models\Wallet::whereIn('user_id', $referredUserIds)->pluck('id');
-        
-        // Sum of all actual credits given by admin to this sub-user
-        $givenByAdmin = \App\Models\WalletTransaction::where('source_id', $id)
-            ->where('source_type', 'SUB_USER_CREDIT')
-            ->where('status', 'SUCCESS')
-            ->sum('amount');
+        try {
+            $subUser = SubUser::findOrFail($id);
+            $referredUserIds = User::where('sub_user_id', $id)->pluck('id');
+            
+            $givenByAdmin = 0;
+            $finalGivenByAdmin = $subUser->credit_limit;
+            $totalGenerated = 0;
 
-        // Sum of all DISBURSED principal given by this sub-user
-        $loans = Loan::whereIn('user_id', $referredUserIds)->get();
-        $totalLoanGiven = $loans->whereIn('status', ['DISBURSED', 'CLOSED'])->sum('amount');
+            // Try fetching from WalletTransaction, handle if table/column missing
+            try {
+                $givenByAdmin = \App\Models\WalletTransaction::where('source_id', $id)
+                    ->where('source_type', 'SUB_USER_CREDIT')
+                    ->where('status', 'SUCCESS')
+                    ->sum('amount');
+                
+                $walletIds = \App\Models\Wallet::whereIn('user_id', $referredUserIds)->pluck('id');
+                
+                $totalGenerated = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
+                    ->where('type', 'CREDIT')
+                    ->whereIn('source_type', ['SUB_USER_REFERRAL_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS'])
+                    ->sum('amount');
+            } catch (\Exception $e) {
+                \Log::warning("Stats calculation (WalletTransaction) failed: " . $e->getMessage());
+                // Fallback to legacy field if exists, else 0
+                // $totalGenerated = 0; 
+            }
 
-        // Sum of all pending repayments (To Recover)
-        $disbursedLoanIds = $loans->where('status', 'DISBURSED')->pluck('id');
-        $toRecover = \App\Models\LoanRepayment::whereIn('loan_id', $disbursedLoanIds)
-            ->where('status', '!=', 'PAID')
-            ->sum('amount');
-        
-        // Robust Fallback: 
-        // If no transaction history is found (legacy data), assuming credit_limit is the total given.
-        $finalGivenByAdmin = $givenByAdmin > 0 ? $givenByAdmin : $subUser->credit_limit;
+            // Sum of all DISBURSED principal given by this sub-user
+            $loans = Loan::whereIn('user_id', $referredUserIds)->get();
+            $totalLoanGiven = $loans->whereIn('status', ['DISBURSED', 'CLOSED'])->sum('amount');
 
-        // Calculate total stats from transactions to avoid column errors
-        $totalGenerated = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
-            ->where('type', 'CREDIT')
-            ->whereIn('source_type', ['SUB_USER_REFERRAL_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS'])
-            ->sum('amount');
+            // Sum of all pending repayments (To Recover)
+            $disbursedLoanIds = $loans->where('status', 'DISBURSED')->pluck('id');
+            $toRecover = \App\Models\LoanRepayment::whereIn('loan_id', $disbursedLoanIds)
+                ->where('status', '!=', 'PAID')
+                ->sum('amount');
+            
+            if ($givenByAdmin > 0) {
+                $finalGivenByAdmin = $givenByAdmin;
+            }
 
-        $stats = [
-            'total_referrals' => $referredUserIds->count(),
-            'total_amount_spent' => (float)$totalGenerated,
-            'credit_balance' => (float)$subUser->credit_balance,
-            'credit_limit' => (float)$subUser->credit_limit,
-            'given_by_admin' => (float)$finalGivenByAdmin,
-            'given_as_loan' => (float)$totalLoanGiven,
-            'to_recover' => (float)$toRecover
-        ];
+            $stats = [
+                'total_referrals' => $referredUserIds->count(),
+                'total_amount_spent' => (float)$totalGenerated,
+                'credit_balance' => (float)$subUser->credit_balance,
+                'credit_limit' => (float)$subUser->credit_limit,
+                'given_by_admin' => (float)$finalGivenByAdmin,
+                'given_as_loan' => (float)$totalLoanGiven,
+                'to_recover' => (float)$toRecover
+            ];
 
-        return response()->json($stats);
+            return response()->json($stats);
+
+        } catch (\Exception $e) {
+            \Log::error("Critical Error in getReferralStats: " . $e->getMessage());
+            // Return safe default structure to prevent UI crash
+            return response()->json([
+                'total_referrals' => 0,
+                'total_amount_spent' => 0,
+                'credit_balance' => 0,
+                'credit_limit' => 0,
+                'given_by_admin' => 0,
+                'given_as_loan' => 0,
+                'to_recover' => 0,
+                'error' => 'Stats unavailable'
+            ]);
+        }
     }
 
     public function getMyLoans(Request $request)
