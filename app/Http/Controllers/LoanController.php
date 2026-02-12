@@ -795,27 +795,7 @@ class LoanController extends Controller
             if ($allocation) {
                 $allocation->status = 'DISBURSED';
                 $allocation->actual_disbursed = $loan->amount;
-                 // If the reserved amount was different (due to admin reduction), we might need logic here.
-                 // But typically, we disburse the full loan amount. 
-                 // If reserved was 9700 (due to 3000 reduction), and we disburse 10000...
-                 // Then we are overspending the pool? 
-                 // The requirement says: "if admin enter 103000 ... edited to 100000 ... decreased amount has to be deducted".
-                 // This implies the USER gets less money? 
-                 // "amount has to be deducted in the proportion"
-                 
-                 // If allocation was adjusted, the user should receive the ADJUSTED amount.
-                 if ($allocation->allocated_amount < $loan->amount) {
-                      // Disburse only the allocated amount?
-                      // Or do we disburse the full amount and create a deficit?
-                      // "decreased amount has to be deducted" implies user gets less.
-                      // So we should update the LOAN amount to match the allocation!
-                      
-                      $loan->amount = $allocation->allocated_amount;
-                      $loan->save(); // Update loan principal
-                 }
-                 
-                 $allocation->actual_disbursed = $loan->amount;
-                 $allocation->save();
+                $allocation->save();
             } else {
                  // Fallback if no allocation exists (legacy loans?)
                  // Create one now for record keeping
@@ -827,6 +807,25 @@ class LoanController extends Controller
                     'status' => 'DISBURSED'
                  ]);
             }
+
+            // SUB-USER TREASURY LOGIC
+            $borrower = \App\Models\User::find($loan->user_id);
+            if ($borrower && $borrower->sub_user_id) {
+                $subUser = \App\Models\SubUser::find($borrower->sub_user_id);
+                if ($subUser) {
+                    // Deduct from Sub-User's virtual credit balance
+                    $subUser->credit_balance -= $loan->amount;
+                    $subUser->save();
+                }
+            }
+            
+            // Transfer Funds to User Wallet
+            $this->walletService->transferSystemFunds(
+                $loan->user_id,
+                $loan->amount,
+                'LOAN_DISBURSAL',
+                "Loan #{$loan->id} Disbursement"
+            );
 
             // Unlock the transaction in the wallet
             $this->walletService->approveLoanTransaction($loan->id);

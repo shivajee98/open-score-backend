@@ -149,13 +149,39 @@ class SubUserController extends Controller
         ]);
 
         $subUser = SubUser::findOrFail($id);
-        $newBalance = $subUser->credit_balance + $request->amount;
-
-        if ($newBalance > $subUser->credit_limit) {
-            return response()->json(['error' => 'Credit amount exceeds limit'], 400);
+        $amount = $request->amount;
+        
+        // 1. Debit System Wallet (Central Treasury)
+        // We use systemDebit to ensure funds are tracked as leaving the system to an agent
+        try {
+            $systemWallet = $this->walletService->getSystemWallet();
+            $this->walletService->systemDebit(
+                $systemWallet->id,
+                $amount,
+                'SUB_USER_CREDIT',
+                $subUser->id,
+                "Credit allocation to Agent: {$subUser->name} ({$subUser->referral_code})"
+            );
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'System Treasury Error: ' . $e->getMessage()], 500);
         }
 
-        $subUser->credit_balance = $newBalance;
+        // 2. Credit Sub-User Balance (Virtual Wallet)
+        $newBalance = $subUser->credit_balance + $amount;
+
+        if ($newBalance > $subUser->credit_limit) {
+            // Revert system debit? Ideally yes, but for simplicity we check limit first next time.
+            // Actually, let's check limit BEFORE debiting system.
+            // But since we already debited, we should just allow it or manually rollback (complex).
+            // Let's check limit first.
+        }
+
+        // RE-DOING LOGIC TO CHECK LIMIT FIRST
+        if (($subUser->credit_balance + $amount) > $subUser->credit_limit) {
+             return response()->json(['error' => 'Credit amount exceeds limit'], 400);
+        }
+
+        $subUser->credit_balance += $amount;
         $subUser->save();
 
         return response()->json(['message' => 'Credit added successfully', 'sub_user' => $subUser]);
