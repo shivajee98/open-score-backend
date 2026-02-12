@@ -125,8 +125,8 @@ class AuthController extends Controller
                    $user->status = 'ACTIVE';
                    $user->is_onboarded = false;
                    $user->password = bcrypt('password');
-                   $user->referral_campaign_id = $referralCampaignId;
-                   $user->sub_user_id = $subUserId;
+                   if ($referralCampaignId) $user->referral_campaign_id = $referralCampaignId;
+                   if ($subUserId) $user->sub_user_id = $subUserId;
                    if (empty($user->my_referral_code)) {
                        $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
                    }
@@ -170,7 +170,11 @@ class AuthController extends Controller
                   }
 
                   // Credit Referral/Signup Bonus to new user
-                  if ($cashbackAmount > 0) {
+                  $alreadyHasBonus = \App\Models\WalletTransaction::where('wallet_id', function($q) use ($user) {
+                      $q->select('id')->from('wallets')->where('user_id', $user->id);
+                  })->whereIn('source_type', ['SIGNUP_BONUS', 'REFERRAL_BONUS', 'SUB_USER_REFERRAL_BONUS', 'REFERRAL_WELCOME_BONUS'])->exists();
+
+                  if ($cashbackAmount > 0 && !$alreadyHasBonus) {
                       \Log::info("Crediting welcome bonus: {$cashbackAmount} to new user: {$user->id}");
                       $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
                       
