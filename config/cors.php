@@ -26,6 +26,7 @@ return [
         'https://kyc.msmeloan.sbs',
         'https://admin.msmeloan.sbs',
         'https://api.msmeloan.sbs', 
+        'https://agent.msmeloan.sbs',
         'https://openscore.msmeloan.sbs',
         'https://openscore.galobyte.site',
     ],
