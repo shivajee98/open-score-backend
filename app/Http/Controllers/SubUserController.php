@@ -56,73 +56,83 @@ class SubUserController extends Controller
 
     public function show($id)
     {
-        $subUser = SubUser::findOrFail($id);
-        
-        // Basic Stats
-        $referredUsers = User::where('sub_user_id', $id)->get();
-        $referredUserIds = $referredUsers->pluck('id');
-        $walletIds = \App\Models\Wallet::whereIn('user_id', $referredUserIds)->pluck('id');
-        
-        $customerCount = $referredUsers->where('role', 'CUSTOMER')->count();
-        $merchantCount = $referredUsers->where('role', 'MERCHANT')->count();
+        try {
+            $subUser = SubUser::findOrFail($id);
+            
+            // Basic Stats
+            $referredUsers = User::where('sub_user_id', $id)->get();
+            $referredUserIds = $referredUsers->pluck('id');
+            $walletIds = \App\Models\Wallet::whereIn('user_id', $referredUserIds)->pluck('id');
+            
+            $customerCount = $referredUsers->where('role', 'CUSTOMER')->count();
+            $merchantCount = $referredUsers->where('role', 'MERCHANT')->count();
 
-        // Loans Stats
-        $loans = Loan::whereIn('user_id', $referredUserIds)->get();
-        $totalLoansCount = $loans->count();
-        $approvedLoansCount = $loans->where('status', 'APPROVED')->count();
-        $disbursedLoansCount = $loans->where('status', 'DISBURSED')->count();
-        $totalLoanVolume = $loans->whereIn('status', ['APPROVED', 'DISBURSED', 'CLOSED'])->sum('amount');
+            // Loans Stats
+            $loans = Loan::whereIn('user_id', $referredUserIds)->get();
+            $totalLoansCount = $loans->count();
+            $approvedLoansCount = $loans->where('status', 'APPROVED')->count();
+            $disbursedLoansCount = $loans->where('status', 'DISBURSED')->count();
+            $totalLoanVolume = $loans->whereIn('status', ['APPROVED', 'DISBURSED', 'CLOSED'])->sum('amount');
 
-        // Transaction Summaries
-        $transactions = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)->get();
-        
-        // EMIs Paid (Assuming DEBIT from user wallet for loan repayment)
-        $totalEmisPaid = $transactions->where('type', 'DEBIT')->sum('amount');
-        
-        // Cashback Given (Fixed: Sum from transactions to handle missing column)
-        $totalCashbackGiven = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
-            ->where('type', 'CREDIT') 
-            ->whereIn('source_type', ['SUB_USER_REFERRAL_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS', 'SIGNUP_BONUS'])
-            ->sum('amount');
+            // Transaction Summaries
+            $transactions = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)->get();
+            
+            // EMIs Paid (Assuming DEBIT from user wallet for loan repayment)
+            $totalEmisPaid = $transactions->where('type', 'DEBIT')->sum('amount');
+            
+            // Cashback Given - Robust Calculation
+            $totalCashbackGiven = 0;
+            try {
+                 $totalCashbackGiven = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
+                    ->where('type', 'CREDIT') 
+                    ->whereIn('source_type', ['SUB_USER_REFERRAL_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS', 'SIGNUP_BONUS'])
+                    ->sum('amount');
+            } catch (\Exception $e) {
+                 \Log::warning("SubUser Show: Failed to calculate cashback: " . $e->getMessage());
+            }
 
-        // Recent Activity
-        $recentUsers = User::where('sub_user_id', $id)
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
+            // Recent Activity
+            $recentUsers = User::where('sub_user_id', $id)
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
 
-        $recentTransactions = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
-            ->with('user:id,name,business_name,role')
-            ->orderBy('created_at', 'desc')
-            ->limit(15)
-            ->get();
+            $recentTransactions = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
+                ->with('user:id,name,business_name,role')
+                ->orderBy('created_at', 'desc')
+                ->limit(15)
+                ->get();
 
-        $recentLoans = Loan::whereIn('user_id', $referredUserIds)
-            ->with('user:id,name,business_name,role')
-            ->orderBy('created_at', 'desc')
-            ->limit(10)
-            ->get();
-        
-        return response()->json([
-            'sub_user' => $subUser,
-            'stats' => [
-                'total_users' => $referredUsers->count(),
-                'customers' => $customerCount,
-                'merchants' => $merchantCount,
-                'total_emis_paid' => $totalEmisPaid,
-                'total_cashback_given' => $totalCashbackGiven,
-                'loans' => [
-                    'total' => $totalLoansCount,
-                    'approved' => $approvedLoansCount,
-                    'disbursed' => $disbursedLoansCount,
-                    'pending' => $loans->where('status', 'PENDING')->count(),
-                    'volume' => $totalLoanVolume
-                ]
-            ],
-            'recent_users' => $recentUsers,
-            'recent_transactions' => $recentTransactions,
-            'recent_loans' => $recentLoans
-        ]);
+            $recentLoans = Loan::whereIn('user_id', $referredUserIds)
+                ->with('user:id,name,business_name,role')
+                ->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get();
+            
+            return response()->json([
+                'sub_user' => $subUser,
+                'stats' => [
+                    'total_users' => $referredUsers->count(),
+                    'customers' => $customerCount,
+                    'merchants' => $merchantCount,
+                    'total_emis_paid' => $totalEmisPaid,
+                    'total_cashback_given' => $totalCashbackGiven,
+                    'loans' => [
+                        'total' => $totalLoansCount,
+                        'approved' => $approvedLoansCount,
+                        'disbursed' => $disbursedLoansCount,
+                        'pending' => $loans->where('status', 'PENDING')->count(),
+                        'volume' => $totalLoanVolume
+                    ]
+                ],
+                'recent_users' => $recentUsers,
+                'recent_transactions' => $recentTransactions,
+                'recent_loans' => $recentLoans
+            ]);
+        } catch (\Exception $e) {
+            \Log::error("SubUser Show Error: " . $e->getMessage());
+            return response()->json(['error' => 'Failed to load sub-user profile', 'debug_message' => $e->getMessage()], 500);
+        }
     }
 
     public function update(Request $request, $id)
