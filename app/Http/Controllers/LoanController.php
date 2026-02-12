@@ -921,6 +921,9 @@ class LoanController extends Controller
             if ($loanUser && $loanUser->sub_user_id) {
                 $agent = \App\Models\SubUser::find($loanUser->sub_user_id);
                 if ($agent && $agent->is_active) {
+                    // Update Agent Credit Limit (Deduct Disbursal Amount)
+                    $agent->decrement('credit_balance', $loan->amount);
+
                     app(\App\Services\ReferralService::class)->grantAgentDisbursementCashback($agent, $loanUser, $loan);
                 }
             }
