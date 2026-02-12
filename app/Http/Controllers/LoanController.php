@@ -412,14 +412,17 @@ class LoanController extends Controller
             'last_name' => 'required|string|max:100',
             'email' => 'required|email',
             'phone' => 'required|string',
+            'birth_date' => 'required|date',
             'street_address' => 'required|string',
             'city' => 'required|string',
             'state' => 'required|string',
-            'postal_code' => 'required|string',
+            'postal_code' => 'required|string|size:6',
             'employer' => 'required|string',
             'occupation' => 'required|string',
-            'aadhar_number' => 'required|string|size:12', // Added validation
-            'pan_number' => 'required|string|size:10',    // Added validation
+            'annual_income' => 'required|numeric',
+            'loan_usage' => 'required|string',
+            'aadhar_number' => 'required|string|size:12',
+            'pan_number' => 'required|string|size:10',
             'consent' => 'required|accepted'
         ]);
 
