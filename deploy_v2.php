@@ -64,4 +64,7 @@ deploy_app('kyc_dist.zip', '/home/u910898544/domains/msmeloan.sbs/public_html/ky
 // 5. Deploy Support
 deploy_app('support_dist.zip', '/home/u910898544/domains/msmeloan.sbs/public_html/support');
 
+// 6. Deploy Agent (Sub-User)
+deploy_app('agent_dist.zip', '/home/u910898544/domains/msmeloan.sbs/public_html/agent');
+
 echo "<h3>✨ All Deployments Completed!</h3>";
