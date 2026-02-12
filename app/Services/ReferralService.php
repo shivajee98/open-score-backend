@@ -30,6 +30,14 @@ class ReferralService
         // 1. Check if it's an Agent (SubUser) Referral Code
         $subUser = SubUser::where('referral_code', $code)->where('is_active', true)->first();
         if ($subUser) {
+            // If already linked to THIS agent, just try granting the bonus (in case it failed before)
+            if ($user->sub_user_id == $subUser->id) {
+                if ($user->is_onboarded) {
+                    $this->grantAgentSignupBonus($subUser, $user);
+                }
+                return true;
+            }
+            
             // Only link if not already linked to an agent or referrer
             if (!$user->sub_user_id && !UserReferral::where('referred_id', $user->id)->exists()) {
                 $user->sub_user_id = $subUser->id;
