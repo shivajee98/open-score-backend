@@ -47,7 +47,10 @@ function deploy_app($zipName, $targetDir) {
         $zip->close();
         
         // Create .htaccess for SPA routing & Clean URLs & Directory fixes
-        $htContent = "<IfModule mod_rewrite.c>\n  # Fix 403 Forbidden when accessing directories that coincide with .html files\n  DirectorySlash Off\n  RewriteEngine On\n  RewriteBase /\n  \n  # Remove trailing slash from directory-like URLs\n  RewriteCond %{REQUEST_FILENAME} -d\n  RewriteRule ^(.*)/$ /$1 [L,R=301]\n  \n  # Rewrite clean URLs to .html files\n  RewriteCond %{DOCUMENT_ROOT}/$1.html -f\n  RewriteRule ^(.*)$ $1.html [L]\n  \n  # SPA fallback\n  RewriteCond %{REQUEST_FILENAME} !-f\n  RewriteCond %{REQUEST_FILENAME} !-d\n  RewriteRule . /index.html [L]\n</IfModule>";
+        // Create .htaccess for SPA routing (Generic Fallback)
+        // We force EVERYTHING to index.html unless it's a real file.
+        // This solves the /login directory vs /login route conflict by letting Next.js handle it client-side.
+        $htContent = "<IfModule mod_rewrite.c>\n  RewriteEngine On\n  RewriteBase /\n  RewriteRule ^index\.html$ - [L]\n  RewriteCond %{REQUEST_FILENAME} !-f\n  RewriteCond %{REQUEST_FILENAME} !-d\n  RewriteRule . /index.html [L]\n</IfModule>";
         file_put_contents("$targetDir/.htaccess", $htContent);
         
         echo "<p style='color:green'>✅ Restored $targetDir & Created Robust .htaccess</p>";
