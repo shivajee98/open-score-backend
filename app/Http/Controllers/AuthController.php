@@ -243,28 +243,23 @@ class AuthController extends Controller
                 }
             }
 
-            // AGENT SIGNUP BONUS
+            // AGENT SIGNUP BONUS & REFERRAL BONUS (Consolidated)
+            $referralService = app(\App\Services\ReferralService::class);
+            
+            // 1. Agent Bonus
             if ($user->sub_user_id) {
                 $subUser = \App\Models\SubUser::find($user->sub_user_id);
                 if ($subUser) {
-                    // Check if agent already received bonus for this user
-                    $alreadyBonus = \App\Models\SubUserTransaction::where('sub_user_id', $subUser->id)
-                        ->where('reference_id', 'USER_' . $user->id)
-                        ->exists();
+                    $referralService->grantAgentSignupBonus($subUser, $user);
+                }
+            }
 
-                    if (!$alreadyBonus) {
-                        $settings = \App\Models\ReferralSetting::first();
-                        $agentBonus = $subUser->default_signup_amount ?? ($settings->agent_signup_bonus ?? 50.00);
-
-                        if ($agentBonus > 0) {
-                            $walletService->creditSubUser(
-                                $subUser->id,
-                                $agentBonus,
-                                "Signup Reward for user: {$user->name} (#{$user->id})",
-                                'USER_' . $user->id
-                            );
-                        }
-                    }
+            // 2. Referrer User Bonus
+            $referralRecord = \App\Models\UserReferral::where('referred_id', $user->id)->first();
+            if ($referralRecord) {
+                $referrer = \App\Models\User::find($referralRecord->referrer_id);
+                if ($referrer) {
+                    $referralService->grantUserSignupBonus($referrer, $user);
                 }
             }
         }
@@ -341,27 +336,23 @@ class AuthController extends Controller
             }
         }
 
-        // AGENT SIGNUP BONUS
+        // AGENT SIGNUP BONUS & REFERRAL BONUS (Consolidated)
+        $referralService = app(\App\Services\ReferralService::class);
+        
+        // 1. Agent Bonus
         if ($user->sub_user_id) {
             $subUser = \App\Models\SubUser::find($user->sub_user_id);
             if ($subUser) {
-                $alreadyBonus = \App\Models\SubUserTransaction::where('sub_user_id', $subUser->id)
-                    ->where('reference_id', 'USER_' . $user->id)
-                    ->exists();
+                $referralService->grantAgentSignupBonus($subUser, $user);
+            }
+        }
 
-                if (!$alreadyBonus) {
-                    $settings = \App\Models\ReferralSetting::first();
-                    $agentBonus = $subUser->default_signup_amount ?? ($settings->agent_signup_bonus ?? 50.00);
-
-                    if ($agentBonus > 0) {
-                        $walletService->creditSubUser(
-                            $subUser->id,
-                            $agentBonus,
-                            "Signup Reward for merchant: {$user->name} (#{$user->id})",
-                            'USER_' . $user->id
-                        );
-                    }
-                }
+        // 2. Referrer User Bonus
+        $referralRecord = \App\Models\UserReferral::where('referred_id', $user->id)->first();
+        if ($referralRecord) {
+            $referrer = \App\Models\User::find($referralRecord->referrer_id);
+            if ($referrer) {
+                $referralService->grantUserSignupBonus($referrer, $user);
             }
         }
 

@@ -279,12 +279,17 @@ class SubUserController extends Controller
             $loans = Loan::whereIn('user_id', $referredUserIds)->get();
             $totalLoanGiven = $loans->whereIn('status', ['DISBURSED', 'CLOSED'])->sum('amount');
 
-            // Sum of all pending repayments (To Recover)
+            // Sum of all pending repayments (To Recover) - include all pending EMIs for disbursed loans
             $disbursedLoanIds = $loans->where('status', 'DISBURSED')->pluck('id');
             $toRecover = \App\Models\LoanRepayment::whereIn('loan_id', $disbursedLoanIds)
                 ->where('status', '!=', 'PAID')
                 ->sum('amount');
             
+            // Recovered stats (Total Paid by users)
+            $recovered = \App\Models\LoanRepayment::whereIn('loan_id', $loans->pluck('id'))
+                ->where('status', 'PAID')
+                ->sum('amount');
+
             if ($givenByAdmin > 0) {
                 $finalGivenByAdmin = $givenByAdmin;
             }
@@ -296,6 +301,7 @@ class SubUserController extends Controller
                 'credit_limit' => (float)$subUser->credit_limit,
                 'given_by_admin' => (float)$finalGivenByAdmin,
                 'given_as_loan' => (float)$totalLoanGiven,
+                'recovered' => (float)$recovered,
                 'to_recover' => (float)$toRecover,
                 'earnings_balance' => (float)$subUser->earnings_balance
             ];

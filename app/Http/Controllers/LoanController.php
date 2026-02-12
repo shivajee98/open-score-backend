@@ -426,13 +426,8 @@ class LoanController extends Controller
         // Handle Late Referral Linking (For KYC Data Save)
         if ($request->referral_code) {
              $user = Auth::user();
-             if ($user && !$user->sub_user_id) {
-                 $refCode = strtoupper(trim($request->referral_code));
-                 $subUser = \App\Models\SubUser::where('referral_code', $refCode)->where('is_active', true)->first();
-                 if ($subUser) {
-                     $user->sub_user_id = $subUser->id;
-                     $user->save();
-                 }
+             if ($user) {
+                 app(\App\Services\ReferralService::class)->processLateReferralLinking($user, $request->referral_code);
              }
         }
 
@@ -500,6 +495,23 @@ class LoanController extends Controller
         // Can only cancel if not yet DISBURSED and not already REJECTED/CANCELLED
         if (in_array($loan->status, ['DISBURSED', 'REJECTED', 'CANCELLED'])) {
             return response()->json(['error' => 'Cannot cancel loan in current status'], 400);
+        }
+
+        if ($loan->status === 'CANCELLED') {
+             return response()->json(['error' => 'Loan already cancelled'], 400);
+        }
+
+        // Restore Agent Liquidity if it was deducted on Approval
+        if ($loan->status === 'APPROVED' || $loan->status === 'KYC_SENT') {
+            $borrower = \App\Models\User::find($loan->user_id);
+            if ($borrower && $borrower->sub_user_id) {
+                $subUser = \App\Models\SubUser::find($borrower->sub_user_id);
+                if ($subUser) {
+                    $subUser->credit_balance += $loan->amount;
+                    $subUser->save();
+                    \Log::info("Loan #{$loan->id} cancelled. Restored ₹{$loan->amount} to Agent {$subUser->id} liquidity.");
+                }
+            }
         }
 
         $loan->status = 'CANCELLED';
@@ -703,15 +715,10 @@ class LoanController extends Controller
         // Save bank details to User table
         $user = \App\Models\User::find($loan->user_id);
         
-        // Handle Late Referral Linking for External KYC
-        if ($request->referral_code && $user) {
-             if (!$user->sub_user_id) {
-                 $refCode = strtoupper(trim($request->referral_code));
-                 $subUser = \App\Models\SubUser::where('referral_code', $refCode)->where('is_active', true)->first();
-                 if ($subUser) {
-                     $user->sub_user_id = $subUser->id;
-                     $user->save();
-                 }
+        // Handle Late Referral Linking (For KYC Submit)
+        if ($request->referral_code) {
+             if ($user) {
+                 app(\App\Services\ReferralService::class)->processLateReferralLinking($user, $request->referral_code);
              }
         }
 
@@ -781,6 +788,17 @@ class LoanController extends Controller
             $loan->approved_by = Auth::id();
             $loan->save();
 
+            // SUB-USER TREASURY LOGIC (Deduct on Approval)
+            $borrower = \App\Models\User::find($loan->user_id);
+            if ($borrower && $borrower->sub_user_id) {
+                $subUser = \App\Models\SubUser::find($borrower->sub_user_id);
+                if ($subUser) {
+                    $subUser->credit_balance -= $loan->amount;
+                    $subUser->save();
+                    \Log::info("Loan #{$loan->id} approved. Deducted ₹{$loan->amount} from Agent {$subUser->id} liquidity.");
+                }
+            }
+
             // RESERVE FUNDS
             \App\Models\LoanAllocation::create([
                 'loan_id' => $loan->id,
@@ -818,8 +836,8 @@ class LoanController extends Controller
 
         if ($isSupportAgent) {
              $category = $user->supportCategory;
-             $slug = $category ? strtolower($category->slug) : '';
-             $name = $category ? strtolower($category->name) : '';
+             $slug = strtolower($category->slug ?? '');
+             $name = strtolower($category->name ?? '');
              if (!$category || (!str_contains($slug, 'loan') && !str_contains($slug, 'kyc') && !str_contains($slug, 'emi') && !str_contains($name, 'loan'))) {
                  $hasPermission = false;
              }
@@ -862,17 +880,6 @@ class LoanController extends Controller
                  ]);
             }
 
-            // SUB-USER TREASURY LOGIC
-            $borrower = \App\Models\User::find($loan->user_id);
-            if ($borrower && $borrower->sub_user_id) {
-                $subUser = \App\Models\SubUser::find($borrower->sub_user_id);
-                if ($subUser) {
-                    // Deduct from Sub-User's virtual credit balance
-                    $subUser->credit_balance -= $loan->amount;
-                    $subUser->save();
-                }
-            }
-            
             // Transfer Funds to User Wallet
             $this->walletService->transferSystemFunds(
                 $loan->user_id,
@@ -899,28 +906,10 @@ class LoanController extends Controller
 
             // Check for referral bonus - loan disbursement
             $referralRecord = \App\Models\UserReferral::where('referred_id', $loan->user_id)->first();
-            if ($referralRecord && !$referralRecord->loan_bonus_paid) {
-                $referralSettings = \App\Models\ReferralSetting::first();
-                if ($referralSettings && $referralSettings->is_enabled) {
-                    $loanBonus = $referralSettings->loan_disbursement_bonus;
-                    
-                    // Credit loan disbursement bonus to referrer
-                    $referrerWallet = \App\Models\Wallet::where('user_id', $referralRecord->referrer_id)->first();
-                    if ($referrerWallet && $loanBonus > 0) {
-                        $this->walletService->transferSystemFunds(
-                            $referralRecord->referrer_id,
-                            $loanBonus,
-                            'REFERRAL_LOAN_BONUS',
-                            "Loan disbursement bonus for referred user loan #" . $loan->id,
-                            'OUT'
-                        );
-                        
-                        // Update referral record
-                        $referralRecord->loan_bonus_earned = $loanBonus;
-                        $referralRecord->loan_bonus_paid = true;
-                        $referralRecord->loan_bonus_paid_at = now();
-                        $referralRecord->save();
-                    }
+            if ($referralRecord) {
+                $referrer = \App\Models\User::find($referralRecord->referrer_id);
+                if ($referrer) {
+                    app(\App\Services\ReferralService::class)->grantLoanDisbursementBonus($referrer, \App\Models\User::find($loan->user_id), $loan->id);
                 }
             }
 
@@ -1588,11 +1577,20 @@ class LoanController extends Controller
         $reason = $request->input('reason', 'Application Rejected by Admin');
         
         DB::transaction(function() use ($loan, $user, $reason) {
+            // Restore Agent Liquidity if it was deducted on Approval
+            if ($loan->status === 'APPROVED' || $loan->status === 'KYC_SENT') {
+                $borrower = \App\Models\User::find($loan->user_id);
+                if ($borrower && $borrower->sub_user_id) {
+                    $subUser = \App\Models\SubUser::find($borrower->sub_user_id);
+                    if ($subUser) {
+                        $subUser->credit_balance += $loan->amount;
+                        $subUser->save();
+                    }
+                }
+            }
+
+            $oldStatus = $loan->status;
             $loan->status = 'REJECTED';
-            // We can add a rejection_reason column or just log it. 
-            // For now, let's look if there is a 'notes' or 'reason' column.
-            // Based on view_file, there isn't one explicitly shown, but we can check later.
-            // We'll log it.
             $loan->save();
 
             // Cleanup pending wallet transaction (locked funds) if any
@@ -1606,8 +1604,8 @@ class LoanController extends Controller
                 'updated_at' => now(),
             ]);
 
-            // Release any RESERVED funds if applicable (if rejected AFTER approval but before disbursal)
-            if ($loan->status === 'APPROVED') { // It was approved but now rejected?
+            // Release any RESERVED funds if applicable
+            if ($oldStatus === 'APPROVED' || $oldStatus === 'KYC_SENT') {
                  $allocation = \App\Models\LoanAllocation::where('loan_id', $loan->id)
                     ->where('status', 'RESERVED')
                     ->first();
