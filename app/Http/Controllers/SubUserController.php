@@ -98,7 +98,7 @@ class SubUserController extends Controller
                 ->get();
 
             $recentTransactions = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
-                ->with('user:id,name,business_name,role')
+                ->with('user:users.id,users.name,users.business_name,users.role')
                 ->orderBy('created_at', 'desc')
                 ->limit(15)
                 ->get();
