@@ -24,7 +24,8 @@ class LoanRepayment extends Model
         'admin_note',
         'submitted_at',
         'submitted_by',
-        'is_manual_collection'
+        'is_manual_collection',
+        'is_verified_by_agent'
     ];
 
     protected $appends = ['display_id'];
@@ -36,7 +37,7 @@ class LoanRepayment extends Model
 
     public function agent()
     {
-        return $this->belongsTo(User::class, 'agent_approved_by');
+        return $this->belongsTo(SubUser::class, 'agent_approved_by');
     }
 
     public function loan()

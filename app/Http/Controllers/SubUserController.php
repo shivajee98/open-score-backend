@@ -450,6 +450,8 @@ class SubUserController extends Controller
     public function verifyRepayment(Request $request, $id)
     {
         $subUser = Auth::guard('sub-user')->user();
+        if (!$subUser) return response()->json(['error' => 'Unauthorized'], 401);
+
         $repayment = \App\Models\LoanRepayment::where('id', $id)
             ->whereHas('loan.user', function($q) use ($subUser) {
                 $q->where('sub_user_id', $subUser->id);
@@ -460,10 +462,17 @@ class SubUserController extends Controller
             return response()->json(['error' => 'Repayment already paid'], 400);
         }
 
+        // Only allow verification if proof is submitted by user (status: PENDING_VERIFICATION)
+        // OR if it's already in PENDING and agent wants to force it (optional, but user requested only if applied)
+        if ($repayment->status !== 'PENDING_VERIFICATION') {
+             return response()->json(['error' => 'Payment proof not yet submitted by customer.'], 400);
+        }
+
         $repayment->status = 'AGENT_APPROVED';
-        $repayment->agent_approved_by = $subUser->id; // Internal uses User, so we might need a separate column or just store sub_user_id if we adjust morphs, but let's stick to status for UI
+        $repayment->agent_approved_by = $subUser->id;
         $repayment->agent_approved_at = now();
-        $repayment->notes = $repayment->notes . "\n[Agent Verify Note: " . $request->note . "]";
+        $repayment->is_verified_by_agent = true;
+        $repayment->notes = $repayment->notes . "\n[Agent Verify Note: " . ($request->note ?? 'No note') . "]";
         $repayment->save();
 
         return response()->json(['message' => 'Repayment verified successfully', 'repayment' => $repayment]);
