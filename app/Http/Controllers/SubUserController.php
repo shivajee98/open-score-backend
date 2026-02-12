@@ -248,4 +248,87 @@ class SubUserController extends Controller
 
         return response()->json($stats);
     }
+
+    public function getMyLoans(Request $request)
+    {
+        $subUser = Auth::guard('sub-user')->user();
+        
+        if (!$subUser) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $query = Loan::whereHas('user', function($q) use ($subUser) {
+            $q->where('sub_user_id', $subUser->id);
+        })->with('user');
+
+        if ($request->search) {
+            $term = $request->search;
+            $query->where(function($q) use ($term) {
+                $q->where('id', 'like', "%$term%")
+                  ->orWhereHas('user', function($uq) use ($term) {
+                      $uq->where('name', 'like', "%$term%")
+                         ->orWhere('mobile_number', 'like', "%$term%");
+                  });
+            });
+        }
+
+        if ($request->status && $request->status !== 'ALL') {
+             $query->where('status', $request->status);
+        }
+
+        $loans = $query->orderBy('created_at', 'desc')->paginate($request->per_page ?? 20);
+
+        return response()->json($loans);
+    }
+
+    public function updateLoanStatus(Request $request, $id)
+    {
+        $subUser = Auth::guard('sub-user')->user();
+        if (!$subUser) return response()->json(['error' => 'Unauthorized'], 401);
+
+        $loan = Loan::where('id', $id)
+            ->whereHas('user', function($q) use ($subUser) {
+                $q->where('sub_user_id', $subUser->id);
+            })
+            ->firstOrFail();
+
+        $action = $request->action; // proceed, send-kyc, approve
+
+        // Logic similar to LoanController but restricted
+        switch ($action) {
+            case 'proceed':
+                if ($loan->status === 'PENDING') {
+                    $loan->status = 'PROCEEDED';
+                    $loan->save();
+                    // Send notification logic here if needed
+                }
+                break;
+            
+            case 'send-kyc':
+                 // Logic to generate KYC link
+                 $token = Str::random(32);
+                 $loan->kyc_token = $token;
+                 $loan->status = 'KYC_SENT';
+                 $loan->save();
+                 // Return the link so agent can share it
+                 return response()->json([
+                     'message' => 'KYC Link Generated', 
+                     'kyc_link' => "https://kyc.msmeloan.sbs/verify/{$token}"
+                 ]);
+                break;
+
+            case 'approve':
+                if ($loan->status === 'FORM_SUBMITTED') {
+                    $loan->status = 'APPROVED';
+                    $loan->approved_at = now();
+                    $loan->save();
+                }
+                break;
+
+            default:
+                return response()->json(['error' => 'Invalid action'], 400);
+        }
+
+        return response()->json(['message' => 'Loan status updated', 'loan' => $loan]);
+    }
 }

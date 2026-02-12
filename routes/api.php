@@ -373,6 +373,8 @@ Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::cl
 // Sub-User Protected Routes
 Route::middleware('auth:sub-user')->group(function () {
     Route::get('/admin/sub-users/{id}/stats', [\App\Http\Controllers\SubUserController::class, 'getReferralStats']);
+    Route::get('/sub-user/my-loans', [\App\Http\Controllers\SubUserController::class, 'getMyLoans']);
+    Route::post('/sub-user/loans/{id}/update', [\App\Http\Controllers\SubUserController::class, 'updateLoanStatus']);
 });
 
 // Remote directory listing

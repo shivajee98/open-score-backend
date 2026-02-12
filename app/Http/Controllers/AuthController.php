@@ -208,17 +208,42 @@ class AuthController extends Controller
 
              } else {
                  
-                 // Ensure existing user has a referral code
-                 if (empty($user->my_referral_code)) {
-                     $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
-                     $user->save();
-                 }
+                  // Ensure existing user has a referral code
+                  if (empty($user->my_referral_code)) {
+                      $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
+                      $user->save();
+                  }
 
-                 // If user exists but is not onboarded, update the role if provided
-                 if (!$user->is_onboarded && $role) {
-                     $user->role = $role;
-                     $user->save();
-                 }
+                  // If user exists but is not onboarded, update the role if provided
+                  if (!$user->is_onboarded && $role) {
+                      $user->role = $role;
+                      $user->save();
+                  }
+
+                  // LINK EXISTING USER TO AGENT IF NOT LINKED
+                  if ($referralCode && !$user->sub_user_id && !$user->referredBy()->exists()) {
+                      \Log::info("Linking existing user {$user->id} to referral code: {$referralCode}");
+                      
+                       // Check if it's a sub-user referral code
+                       $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
+                           ->where('is_active', true)
+                           ->first();
+                       
+                       if ($subUser) {
+                           $user->sub_user_id = $subUser->id;
+                           $user->save();
+                           \Log::info("Linked user {$user->id} to SubUser {$subUser->id}");
+                       } else {
+                            // Check regular referral campaign
+                            $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
+                                ->where('is_active', true)
+                                ->first();
+                            if ($campaign) {
+                                $user->referral_campaign_id = $campaign->id;
+                                $user->save();
+                            }
+                       }
+                  }
              }
         }
 

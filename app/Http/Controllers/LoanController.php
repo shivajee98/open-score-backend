@@ -80,6 +80,21 @@ class LoanController extends Controller
                 'message' => "Your last loan was disbursed on {$lastDisbursed->disbursed_at->format('d M')}. You can apply for a new loan after 15 days from disbursal (approx. {$daysLeft} days left)."
             ], 403);
         }
+
+        // --- REFERRAL LINKING LOGIC ---
+        // If user is not linked to anyone, and provides a referral code, link them now.
+        if ($request->referral_code) {
+           $user = Auth::user();
+           if (!$user->sub_user_id && !$user->referredBy()->exists()) {
+               $refCode = strtoupper(trim($request->referral_code));
+               $subUser = \App\Models\SubUser::where('referral_code', $refCode)->where('is_active', true)->first();
+               if ($subUser) {
+                   $user->sub_user_id = $subUser->id;
+                   $user->save();
+                   \Log::info("Loan Apply: Linked user {$user->id} to SubUser {$subUser->id}");
+               }
+           }
+        }
         
         // Use Plan details if provided, otherwise trust request (legacy)
         $amount = $request->amount;
