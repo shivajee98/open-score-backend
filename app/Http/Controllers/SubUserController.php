@@ -255,12 +255,16 @@ class SubUserController extends Controller
             ->where('status', '!=', 'PAID')
             ->sum('amount');
         
+        // Robust Fallback: 
+        // If no transaction history is found (legacy data), assuming credit_limit is the total given.
+        $finalGivenByAdmin = $givenByAdmin > 0 ? $givenByAdmin : $subUser->credit_limit;
+
         $stats = [
             'total_referrals' => $referredUserIds->count(),
             'total_amount_spent' => (float)User::whereIn('id', $referredUserIds)->sum('signup_cashback_received'),
             'credit_balance' => (float)$subUser->credit_balance,
             'credit_limit' => (float)$subUser->credit_limit,
-            'given_by_admin' => (float)$givenByAdmin ?: (float)$subUser->credit_limit, // Fallback to limit if no transactions found
+            'given_by_admin' => (float)$finalGivenByAdmin,
             'given_as_loan' => (float)$totalLoanGiven,
             'to_recover' => (float)$toRecover
         ];
