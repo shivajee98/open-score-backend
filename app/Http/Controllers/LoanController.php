@@ -907,12 +907,21 @@ class LoanController extends Controller
             // Generate Repayment Schedule
             $this->generateRepaymentSchedule($loan);
 
-            // Check for referral bonus - loan disbursement
+            // Check for referral bonus - loan disbursement (User-to-User)
             $referralRecord = \App\Models\UserReferral::where('referred_id', $loan->user_id)->first();
             if ($referralRecord) {
                 $referrer = \App\Models\User::find($referralRecord->referrer_id);
                 if ($referrer) {
                     app(\App\Services\ReferralService::class)->grantLoanDisbursementBonus($referrer, \App\Models\User::find($loan->user_id), $loan->id);
+                }
+            }
+
+            // Agent Cashback on Disbursement
+            $loanUser = \App\Models\User::find($loan->user_id);
+            if ($loanUser && $loanUser->sub_user_id) {
+                $agent = \App\Models\SubUser::find($loanUser->sub_user_id);
+                if ($agent && $agent->is_active) {
+                    app(\App\Services\ReferralService::class)->grantAgentDisbursementCashback($agent, $loanUser, $loan);
                 }
             }
 

@@ -243,16 +243,8 @@ class AuthController extends Controller
                 }
             }
 
-            // AGENT SIGNUP BONUS & REFERRAL BONUS (Consolidated)
+            // REFERRAL BONUS (User-to-User only, Agent cashback is on loan disbursement)
             $referralService = app(\App\Services\ReferralService::class);
-            
-            // 1. Agent Bonus
-            if ($user->sub_user_id) {
-                $subUser = \App\Models\SubUser::find($user->sub_user_id);
-                if ($subUser) {
-                    $referralService->grantAgentSignupBonus($subUser, $user);
-                }
-            }
 
             // 2. Referrer User Bonus
             $referralRecord = \App\Models\UserReferral::where('referred_id', $user->id)->first();
@@ -336,16 +328,8 @@ class AuthController extends Controller
             }
         }
 
-        // AGENT SIGNUP BONUS & REFERRAL BONUS (Consolidated)
+        // REFERRAL BONUS (User-to-User only, Agent cashback is on loan disbursement)
         $referralService = app(\App\Services\ReferralService::class);
-        
-        // 1. Agent Bonus
-        if ($user->sub_user_id) {
-            $subUser = \App\Models\SubUser::find($user->sub_user_id);
-            if ($subUser) {
-                $referralService->grantAgentSignupBonus($subUser, $user);
-            }
-        }
 
         // 2. Referrer User Bonus
         $referralRecord = \App\Models\UserReferral::where('referred_id', $user->id)->first();
