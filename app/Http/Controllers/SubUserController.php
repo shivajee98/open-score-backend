@@ -239,12 +239,17 @@ class SubUserController extends Controller
         $subUser = SubUser::findOrFail($id);
         $referredUserIds = User::where('sub_user_id', $id)->pluck('id');
         
+        // Sum of all actual credits given by admin to this sub-user
+        $givenByAdmin = \App\Models\WalletTransaction::where('source_id', $id)
+            ->where('source_type', 'SUB_USER_CREDIT')
+            ->where('status', 'SUCCESS')
+            ->sum('amount');
+
         // Sum of all DISBURSED principal given by this sub-user
         $loans = Loan::whereIn('user_id', $referredUserIds)->get();
         $totalLoanGiven = $loans->whereIn('status', ['DISBURSED', 'CLOSED'])->sum('amount');
 
         // Sum of all pending repayments (To Recover)
-        // We only consider active loans for recovery
         $disbursedLoanIds = $loans->where('status', 'DISBURSED')->pluck('id');
         $toRecover = \App\Models\LoanRepayment::whereIn('loan_id', $disbursedLoanIds)
             ->where('status', '!=', 'PAID')
@@ -252,10 +257,10 @@ class SubUserController extends Controller
         
         $stats = [
             'total_referrals' => $referredUserIds->count(),
-            'total_amount_spent' => User::whereIn('id', $referredUserIds)->sum('signup_cashback_received'),
+            'total_amount_spent' => (float)User::whereIn('id', $referredUserIds)->sum('signup_cashback_received'),
             'credit_balance' => (float)$subUser->credit_balance,
             'credit_limit' => (float)$subUser->credit_limit,
-            'given_by_admin' => (float)$subUser->credit_limit,
+            'given_by_admin' => (float)$givenByAdmin ?: (float)$subUser->credit_limit, // Fallback to limit if no transactions found
             'given_as_loan' => (float)$totalLoanGiven,
             'to_recover' => (float)$toRecover
         ];
