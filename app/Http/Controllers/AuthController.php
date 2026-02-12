@@ -69,46 +69,15 @@ class AuthController extends Controller
                      return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
                  }
                                   
-                  // Handle Referral Logic for New User
+                  // Handle Referral Logic for New User - DISABLED (Moved to KYC)
+                  /*
                   $referralCampaignId = null;
                   $subUserId = null;
                   $cashbackAmount = 0;
-                  $referrerId = null; // Track who referred this user
+                  $referrerId = null; 
                   
                   if ($referralCode) {
-                     // First priority: Check if it's a user's personal referral code
-                     $referrer = \App\Models\User::where('my_referral_code', $referralCode)->first();
-                                          if ($referrer) {
-                         \Log::info("Found personal referrer: {$referrer->id} for code: {$referralCode}");
-                         // This is a personal referral - will create UserReferral record after user creation
-                         $referrerId = $referrer->id;
-                         
-                         // Get signup bonus from referral settings
-                         $referralSettings = \App\Models\ReferralSetting::first();
-                         if ($referralSettings && $referralSettings->is_enabled) {
-                             $cashbackAmount = $referralSettings->signup_bonus;
-                         }
-                     } else {
-                         \Log::info("No personal referrer found for code: {$referralCode}. Checking sub-users...");
-                         // Check if it's a sub-user referral code
-                         $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
-                             ->where('is_active', true)
-                             ->first();
-                         
-                         if ($subUser) {
-                             $subUserId = $subUser->id;
-                             $cashbackAmount = $subUser->default_signup_amount;
-                         } else {
-                             // Check regular referral campaign
-                             $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
-                                 ->where('is_active', true)
-                                 ->first();
-                             if ($campaign) {
-                                 $referralCampaignId = $campaign->id;
-                                 $cashbackAmount = $campaign->cashback_amount;
-                             }
-                         }
-                     }
+                     // ... (Referral Logic Removed) ...
                   } else {
                       // Get default signup cashback from settings
                       $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $role)
@@ -118,15 +87,16 @@ class AuthController extends Controller
                           $cashbackAmount = $cashbackSetting->cashback_amount;
                       }
                   }
-
+                  */
+                  
                    // Get or Create
                    $user = \App\Models\User::where('mobile_number', $mobile)->first() ?: new \App\Models\User(['mobile_number' => $mobile]);
                    $user->role = $role;
                    $user->status = 'ACTIVE';
                    $user->is_onboarded = false;
                    $user->password = bcrypt('password');
-                   if ($referralCampaignId) $user->referral_campaign_id = $referralCampaignId;
-                   if ($subUserId) $user->sub_user_id = $subUserId;
+                   // if ($referralCampaignId) $user->referral_campaign_id = $referralCampaignId; // DISABLED
+                   // if ($subUserId) $user->sub_user_id = $subUserId; // DISABLED
                    if (empty($user->my_referral_code)) {
                        $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
                    }
@@ -138,76 +108,20 @@ class AuthController extends Controller
                   $walletService = app(\App\Services\WalletService::class);
                   $walletService->createWallet($user->id);
 
-                  // Handle personal referral - Create UserReferral record
+                  // Handle personal referral - Create UserReferral record - DISABLED
+                  /*
                   if ($referrerId) {
-                      \Log::info("Processing personal referral from: {$referrerId}");
-                      $referralSettings = \App\Models\ReferralSetting::first();
-                      $signupBonus = $referralSettings ? $referralSettings->signup_bonus : 100;
-                      
-                      try {
-                          
-                          \App\Models\UserReferral::create([
-                              'referrer_id' => $referrerId,
-                              'referred_id' => $user->id,
-                              'referral_code' => strtoupper($referralCode),
-                              'signup_bonus_earned' => $signupBonus,
-                              'signup_bonus_paid' => true,
-                              'signup_bonus_paid_at' => now()
-                          ]);
-                          
-                          // Credit signup bonus to referrer from System Wallet
-                          $walletService->transferSystemFunds(
-                              $referrerId,
-                              $signupBonus,
-                              'REFERRAL_SIGNUP_BONUS',
-                              "Referral bonus for {$user->mobile_number} signup",
-                              'OUT'
-                          );
-                          \Log::info("Referral bonus of {$signupBonus} sent to referrer: {$referrerId}");
-                      } catch (\Exception $e) {
-                          \Log::error("Failed to process referral bonus: " . $e->getMessage());
-                      }
+                      // ...
                   }
+                  */
 
-                  // Credit Referral/Signup Bonus to new user
-                  $alreadyHasBonus = \App\Models\WalletTransaction::where('wallet_id', function($q) use ($user) {
-                      $q->select('id')->from('wallets')->where('user_id', $user->id);
-                  })->whereIn('source_type', ['SIGNUP_BONUS', 'REFERRAL_BONUS', 'SUB_USER_REFERRAL_BONUS', 'REFERRAL_WELCOME_BONUS'])->exists();
-
+                  // Credit Referral/Signup Bonus - DISABLED (Moved to KYC or post-onboarding)
+                  /*
+                  $alreadyHasBonus = ...
                   if ($cashbackAmount > 0 && !$alreadyHasBonus) {
-                      \Log::info("Crediting welcome bonus: {$cashbackAmount} to new user: {$user->id}");
-                      $wallet = \App\Models\Wallet::where('user_id', $user->id)->first();
-                      
-                      try {
-                          // If sub-user referral, deduct from sub-user credit
-                          if ($subUserId && isset($subUser)) {
-                              if ($subUser->credit_balance >= $cashbackAmount) {
-                                  $subUser->credit_balance -= $cashbackAmount;
-                                  $subUser->save();
-                                  
-                                  $walletService->credit(
-                                      $wallet->id,
-                                      $cashbackAmount,
-                                      'SUB_USER_REFERRAL_BONUS',
-                                      $user->id,
-                                      "Welcome Bonus from sub-user: {$subUser->name}"
-                                  );
-                              }
-                          } else {
-                              // Standard bonus from System Wallet
-                              $walletService->transferSystemFunds(
-                                  $user->id,
-                                  $cashbackAmount,
-                                  $referralCampaignId ? 'REFERRAL_BONUS' : ($referrerId ? 'REFERRAL_WELCOME_BONUS' : 'SIGNUP_BONUS'),
-                                  $referralCampaignId ? "Welcome Bonus from code: {$referralCode}" : ($referrerId ? 'Welcome Bonus via Referral' : 'Signup Welcome Bonus'),
-                                  'OUT'
-                              );
-                          }
-                          \Log::info("Welcome bonus credited successfully.");
-                      } catch (\Exception $e) {
-                          \Log::error("Failed to credit welcome bonus: " . $e->getMessage());
-                      }
+                      // ...
                   }
+                  */
 
 
              } else {
@@ -224,30 +138,12 @@ class AuthController extends Controller
                       $user->save();
                   }
 
-                  // LINK EXISTING USER TO AGENT IF NOT LINKED
+                  // LINK EXISTING USER TO AGENT IF NOT LINKED - DISABLED
+                  /*
                   if ($referralCode && !$user->sub_user_id && !$user->referredBy()->exists()) {
-                      \Log::info("Linking existing user {$user->id} to referral code: {$referralCode}");
-                      
-                       // Check if it's a sub-user referral code
-                       $subUser = \App\Models\SubUser::where('referral_code', $referralCode)
-                           ->where('is_active', true)
-                           ->first();
-                       
-                       if ($subUser) {
-                           $user->sub_user_id = $subUser->id;
-                           $user->save();
-                           \Log::info("Linked user {$user->id} to SubUser {$subUser->id}");
-                       } else {
-                            // Check regular referral campaign
-                            $campaign = \App\Models\ReferralCampaign::where('code', $referralCode)
-                                ->where('is_active', true)
-                                ->first();
-                            if ($campaign) {
-                                $user->referral_campaign_id = $campaign->id;
-                                $user->save();
-                            }
-                       }
+                      // ...
                   }
+                  */
              }
         }
 

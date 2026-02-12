@@ -79,9 +79,11 @@ class SubUserController extends Controller
         // EMIs Paid (Assuming DEBIT from user wallet for loan repayment)
         $totalEmisPaid = $transactions->where('type', 'DEBIT')->sum('amount');
         
-        // Cashback Given (Assuming CREDIT to user wallet from system for bonus)
-        // Adjusting logic: Sum signup_cashback_received from referred users
-        $totalCashbackGiven = $referredUsers->sum('signup_cashback_received');
+        // Cashback Given (Fixed: Sum from transactions to handle missing column)
+        $totalCashbackGiven = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
+            ->where('type', 'CREDIT') 
+            ->whereIn('source_type', ['SUB_USER_REFERRAL_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS', 'SIGNUP_BONUS'])
+            ->sum('amount');
 
         // Recent Activity
         $recentUsers = User::where('sub_user_id', $id)
@@ -238,6 +240,7 @@ class SubUserController extends Controller
     {
         $subUser = SubUser::findOrFail($id);
         $referredUserIds = User::where('sub_user_id', $id)->pluck('id');
+        $walletIds = \App\Models\Wallet::whereIn('user_id', $referredUserIds)->pluck('id');
         
         // Sum of all actual credits given by admin to this sub-user
         $givenByAdmin = \App\Models\WalletTransaction::where('source_id', $id)
@@ -259,9 +262,15 @@ class SubUserController extends Controller
         // If no transaction history is found (legacy data), assuming credit_limit is the total given.
         $finalGivenByAdmin = $givenByAdmin > 0 ? $givenByAdmin : $subUser->credit_limit;
 
+        // Calculate total stats from transactions to avoid column errors
+        $totalGenerated = \App\Models\WalletTransaction::whereIn('wallet_id', $walletIds)
+            ->where('type', 'CREDIT')
+            ->whereIn('source_type', ['SUB_USER_REFERRAL_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS'])
+            ->sum('amount');
+
         $stats = [
             'total_referrals' => $referredUserIds->count(),
-            'total_amount_spent' => (float)User::whereIn('id', $referredUserIds)->sum('signup_cashback_received'),
+            'total_amount_spent' => (float)$totalGenerated,
             'credit_balance' => (float)$subUser->credit_balance,
             'credit_limit' => (float)$subUser->credit_limit,
             'given_by_admin' => (float)$finalGivenByAdmin,

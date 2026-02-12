@@ -621,6 +621,19 @@ class LoanController extends Controller
             return response()->json(['error' => 'KYC form not requested or already submitted'], 400);
         }
 
+        // Handle Late Referral Linking
+        if ($request->referral_code) {
+             $user = Auth::user();
+             if (!$user->sub_user_id) {
+                 $refCode = strtoupper(trim($request->referral_code));
+                 $subUser = \App\Models\SubUser::where('referral_code', $refCode)->where('is_active', true)->first();
+                 if ($subUser) {
+                     $user->sub_user_id = $subUser->id;
+                     $user->save();
+                 }
+             }
+        }
+
         $loan->form_data = $request->all();
         $loan->status = 'FORM_SUBMITTED';
         $loan->save();
@@ -676,6 +689,19 @@ class LoanController extends Controller
 
         // Save bank details to User table
         $user = \App\Models\User::find($loan->user_id);
+        
+        // Handle Late Referral Linking for External KYC
+        if ($request->referral_code && $user) {
+             if (!$user->sub_user_id) {
+                 $refCode = strtoupper(trim($request->referral_code));
+                 $subUser = \App\Models\SubUser::where('referral_code', $refCode)->where('is_active', true)->first();
+                 if ($subUser) {
+                     $user->sub_user_id = $subUser->id;
+                     $user->save();
+                 }
+             }
+        }
+
         if ($user) {
             $user->update($request->only([
                 'bank_name', 
