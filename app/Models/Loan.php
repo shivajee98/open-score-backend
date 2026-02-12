@@ -23,7 +23,8 @@ class Loan extends Model
         'disbursed_by',
         'closed_at',
         'loan_plan_id',
-        'kyc_sent_by'
+        'kyc_sent_by',
+        'approved_by_sub_user_id'
     ];
 
     protected $casts = [
@@ -171,6 +172,11 @@ class Loan extends Model
     public function approver()
     {
         return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function subUserApprover()
+    {
+        return $this->belongsTo(SubUser::class, 'approved_by_sub_user_id');
     }
 
     public function disburser()

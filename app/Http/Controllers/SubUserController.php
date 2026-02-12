@@ -389,6 +389,7 @@ class SubUserController extends Controller
                 if ($loan->status === 'FORM_SUBMITTED') {
                     $loan->status = 'APPROVED';
                     $loan->approved_at = now();
+                    $loan->approved_by_sub_user_id = $subUser->id;
                     $loan->save();
                 }
                 break;

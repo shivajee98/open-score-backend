@@ -1181,7 +1181,7 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $query = Loan::with(['user', 'plan']);
+        $query = Loan::with(['user.subUser', 'plan', 'approver', 'subUserApprover']);
 
         // Default: Pending/In-progress loans
         $query->whereNotIn('status', ['DISBURSED', 'REJECTED', 'CLOSED', 'CANCELLED']);
@@ -1210,7 +1210,7 @@ class LoanController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $query = Loan::with(['user', 'plan']);
+        $query = Loan::with(['user.subUser', 'plan', 'approver', 'subUserApprover']);
 
         // Default: Finalized loans
         $query->whereIn('status', ['DISBURSED', 'REJECTED', 'CANCELLED', 'CLOSED']);
