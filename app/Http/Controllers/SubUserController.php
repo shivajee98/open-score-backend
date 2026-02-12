@@ -237,13 +237,27 @@ class SubUserController extends Controller
     public function getReferralStats($id)
     {
         $subUser = SubUser::findOrFail($id);
-        $referredUsers = User::where('sub_user_id', $id)->get();
+        $referredUserIds = User::where('sub_user_id', $id)->pluck('id');
+        
+        // Sum of all DISBURSED principal given by this sub-user
+        $loans = Loan::whereIn('user_id', $referredUserIds)->get();
+        $totalLoanGiven = $loans->whereIn('status', ['DISBURSED', 'CLOSED'])->sum('amount');
+
+        // Sum of all pending repayments (To Recover)
+        // We only consider active loans for recovery
+        $disbursedLoanIds = $loans->where('status', 'DISBURSED')->pluck('id');
+        $toRecover = \App\Models\LoanRepayment::whereIn('loan_id', $disbursedLoanIds)
+            ->where('status', '!=', 'PAID')
+            ->sum('amount');
         
         $stats = [
-            'total_referrals' => $referredUsers->count(),
-            'total_amount_spent' => $referredUsers->sum('signup_cashback_received'),
-            'credit_balance' => $subUser->credit_balance,
-            'credit_limit' => $subUser->credit_limit
+            'total_referrals' => $referredUserIds->count(),
+            'total_amount_spent' => User::whereIn('id', $referredUserIds)->sum('signup_cashback_received'),
+            'credit_balance' => (float)$subUser->credit_balance,
+            'credit_limit' => (float)$subUser->credit_limit,
+            'given_by_admin' => (float)$subUser->credit_limit,
+            'given_as_loan' => (float)$totalLoanGiven,
+            'to_recover' => (float)$toRecover
         ];
 
         return response()->json($stats);
