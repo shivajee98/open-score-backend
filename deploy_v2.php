@@ -45,7 +45,12 @@ function deploy_app($zipName, $targetDir) {
     if ($zip->open($sourceZip) === TRUE) {
         $zip->extractTo($targetDir);
         $zip->close();
-        echo "<p style='color:green'>✅ Restored $targetDir</p>";
+        
+        // Create .htaccess for SPA routing & Clean URLs
+        $htContent = "<IfModule mod_rewrite.c>\n  RewriteEngine On\n  RewriteBase /\n  # Handle trailing slashes\n  RewriteCond %{REQUEST_FILENAME} !-d\n  RewriteRule ^(.*)/$ /$1 [L,R=301]\n  # Rewrite clean URLs to .html files\n  RewriteCond %{REQUEST_FILENAME} !-f\n  RewriteCond %{REQUEST_FILENAME} !-d\n  RewriteCond %{REQUEST_FILENAME}.html -f\n  RewriteRule ^(.*)$ $1.html [L]\n  # SPA fallback\n  RewriteCond %{REQUEST_FILENAME} !-f\n  RewriteCond %{REQUEST_FILENAME} !-d\n  RewriteRule . /index.html [L]\n</IfModule>";
+        file_put_contents("$targetDir/.htaccess", $htContent);
+        
+        echo "<p style='color:green'>✅ Restored $targetDir & Created .htaccess</p>";
     } else {
         echo "<p style='color:red'>❌ Failed to unzip $zipName</p>";
     }

@@ -197,14 +197,17 @@ class SubUserController extends Controller
         $subUser = SubUser::where('mobile_number', $mobile)->first();
         
         if (!$subUser) {
-            \Illuminate\Support\Facades\Log::warning('Agent not found in Database');
+            // Check if they are a regular user
+            $isRegularUser = User::where('mobile_number', $mobile)->exists();
+            if ($isRegularUser) {
+                return response()->json(['error' => 'This account is not registered as an Agent. Access Denied.'], 403);
+            }
             return response()->json(['error' => 'Agent account not found'], 401);
         }
 
         // Demo OTP check
         if ($otp !== '123456') {
-            \Illuminate\Support\Facades\Log::warning('Invalid OTP provided');
-            return response()->json(['error' => 'Invalid OTP'], 401);
+            return response()->json(['error' => 'Invalid Verification Code'], 401);
         }
 
         if (!$subUser->is_active) {
