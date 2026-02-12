@@ -214,6 +214,17 @@ Route::middleware('auth:api,sub-user')->group(function () {
     Route::put('/admin/sub-users/{id}', [\App\Http\Controllers\SubUserController::class, 'update']);
     Route::post('/admin/sub-users/{id}/credit', [\App\Http\Controllers\SubUserController::class, 'addCredit']);
     Route::get('/admin/sub-users/{id}/stats', [\App\Http\Controllers\SubUserController::class, 'getReferralStats']);
+
+    // Sub-User Panel (Agent Access)
+    Route::group(['middleware' => ['auth:sub-user']], function () {
+        Route::get('/sub-user/me', [\App\Http\Controllers\SubUserController::class, 'me']);
+        Route::get('/sub-user/loans', [\App\Http\Controllers\SubUserController::class, 'getMyLoans']);
+        Route::get('/sub-user/loans/{id}', [\App\Http\Controllers\SubUserController::class, 'getLoanDetails']);
+        Route::post('/sub-user/loans/{id}/status', [\App\Http\Controllers\SubUserController::class, 'updateLoanStatus']);
+        Route::get('/sub-user/loans/{id}/repayments', [\App\Http\Controllers\SubUserController::class, 'getRepayments']);
+        Route::post('/sub-user/repayments/{id}/verify', [\App\Http\Controllers\SubUserController::class, 'verifyRepayment']);
+        Route::get('/sub-user/earnings', [\App\Http\Controllers\SubUserController::class, 'getEarningsHistory']);
+    });
     
     // Signup Cashback Settings
     Route::get('/admin/cashback-settings', [\App\Http\Controllers\AdminController::class, 'getCashbackSettings']);

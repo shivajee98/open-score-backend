@@ -296,7 +296,8 @@ class SubUserController extends Controller
                 'credit_limit' => (float)$subUser->credit_limit,
                 'given_by_admin' => (float)$finalGivenByAdmin,
                 'given_as_loan' => (float)$totalLoanGiven,
-                'to_recover' => (float)$toRecover
+                'to_recover' => (float)$toRecover,
+                'earnings_balance' => (float)$subUser->earnings_balance
             ];
 
             return response()->json($stats);
@@ -344,7 +345,9 @@ class SubUserController extends Controller
              $query->where('status', $request->status);
         }
 
-        $loans = $query->orderBy('created_at', 'desc')->paginate($request->per_page ?? 20);
+        $loans = $query->with(['user', 'plan', 'repayments'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->per_page ?? 20);
 
         return response()->json($loans);
     }
@@ -399,5 +402,74 @@ class SubUserController extends Controller
         }
 
         return response()->json(['message' => 'Loan status updated', 'loan' => $loan]);
+    }
+
+    public function me()
+    {
+        $subUser = Auth::guard('sub-user')->user();
+        if (!$subUser) return response()->json(['error' => 'Unauthorized'], 401);
+        
+        return response()->json($subUser);
+    }
+
+    public function getLoanDetails($id)
+    {
+        $subUser = Auth::guard('sub-user')->user();
+        $loan = Loan::where('id', $id)
+            ->whereHas('user', function($q) use ($subUser) {
+                $q->where('sub_user_id', $subUser->id);
+            })
+            ->with(['user', 'plan', 'repayments'])
+            ->firstOrFail();
+
+        return response()->json($loan);
+    }
+
+    public function getRepayments($id)
+    {
+        $subUser = Auth::guard('sub-user')->user();
+        $loan = Loan::where('id', $id)
+            ->whereHas('user', function($q) use ($subUser) {
+                $q->where('sub_user_id', $subUser->id);
+            })
+            ->firstOrFail();
+
+        $repayments = \App\Models\LoanRepayment::where('loan_id', $loan->id)
+            ->orderBy('due_date', 'asc')
+            ->get();
+
+        return response()->json($repayments);
+    }
+
+    public function verifyRepayment(Request $request, $id)
+    {
+        $subUser = Auth::guard('sub-user')->user();
+        $repayment = \App\Models\LoanRepayment::where('id', $id)
+            ->whereHas('loan.user', function($q) use ($subUser) {
+                $q->where('sub_user_id', $subUser->id);
+            })
+            ->firstOrFail();
+
+        if ($repayment->status === 'PAID') {
+            return response()->json(['error' => 'Repayment already paid'], 400);
+        }
+
+        $repayment->status = 'AGENT_APPROVED';
+        $repayment->agent_approved_by = $subUser->id; // Internal uses User, so we might need a separate column or just store sub_user_id if we adjust morphs, but let's stick to status for UI
+        $repayment->agent_approved_at = now();
+        $repayment->notes = $repayment->notes . "\n[Agent Verify Note: " . $request->note . "]";
+        $repayment->save();
+
+        return response()->json(['message' => 'Repayment verified successfully', 'repayment' => $repayment]);
+    }
+
+    public function getEarningsHistory()
+    {
+        $subUser = Auth::guard('sub-user')->user();
+        $transactions = \App\Models\SubUserTransaction::where('sub_user_id', $subUser->id)
+            ->orderBy('created_at', 'desc')
+            ->paginate(20);
+
+        return response()->json($transactions);
     }
 }

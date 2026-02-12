@@ -226,7 +226,7 @@ class AuthController extends Controller
             $bonusAmount = $cashbackSetting ? $cashbackSetting->cashback_amount : 100;
             
             if ($bonusAmount > 0) {
-                // Check if already credited via SIGNUP_BONUS or similar to avoid double-dip
+                // Check if already credited
                 $exists = \App\Models\WalletTransaction::where('wallet_id', $wallet->id)
                     ->where('type', 'CREDIT')
                     ->whereIn('source_type', ['SIGNUP_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS', 'REFERRAL_WELCOME_BONUS'])
@@ -240,6 +240,31 @@ class AuthController extends Controller
                         $user->id, 
                         'Welcome bonus for Account Onboarding'
                     );
+                }
+            }
+
+            // AGENT SIGNUP BONUS
+            if ($user->sub_user_id) {
+                $subUser = \App\Models\SubUser::find($user->sub_user_id);
+                if ($subUser) {
+                    // Check if agent already received bonus for this user
+                    $alreadyBonus = \App\Models\SubUserTransaction::where('sub_user_id', $subUser->id)
+                        ->where('reference_id', 'USER_' . $user->id)
+                        ->exists();
+
+                    if (!$alreadyBonus) {
+                        $settings = \App\Models\ReferralSetting::first();
+                        $agentBonus = $subUser->default_signup_amount ?? ($settings->agent_signup_bonus ?? 50.00);
+
+                        if ($agentBonus > 0) {
+                            $walletService->creditSubUser(
+                                $subUser->id,
+                                $agentBonus,
+                                "Signup Reward for user: {$user->name} (#{$user->id})",
+                                'USER_' . $user->id
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -313,6 +338,30 @@ class AuthController extends Controller
                     $user->id, 
                     'Welcome bonus for Merchant Profile Completion'
                 );
+            }
+        }
+
+        // AGENT SIGNUP BONUS
+        if ($user->sub_user_id) {
+            $subUser = \App\Models\SubUser::find($user->sub_user_id);
+            if ($subUser) {
+                $alreadyBonus = \App\Models\SubUserTransaction::where('sub_user_id', $subUser->id)
+                    ->where('reference_id', 'USER_' . $user->id)
+                    ->exists();
+
+                if (!$alreadyBonus) {
+                    $settings = \App\Models\ReferralSetting::first();
+                    $agentBonus = $subUser->default_signup_amount ?? ($settings->agent_signup_bonus ?? 50.00);
+
+                    if ($agentBonus > 0) {
+                        $walletService->creditSubUser(
+                            $subUser->id,
+                            $agentBonus,
+                            "Signup Reward for merchant: {$user->name} (#{$user->id})",
+                            'USER_' . $user->id
+                        );
+                    }
+                }
             }
         }
 

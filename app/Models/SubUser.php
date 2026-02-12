@@ -19,7 +19,8 @@ class SubUser extends Authenticatable implements JWTSubject
         'credit_balance',
         'credit_limit',
         'default_signup_amount',
-        'is_active'
+        'is_active',
+        'earnings_balance'
     ];
 
     protected $hidden = [
@@ -28,6 +29,7 @@ class SubUser extends Authenticatable implements JWTSubject
 
     protected $casts = [
         'credit_balance' => 'decimal:2',
+        'earnings_balance' => 'decimal:2',
         'credit_limit' => 'decimal:2',
         'default_signup_amount' => 'decimal:2',
         'is_active' => 'boolean'
@@ -50,5 +52,10 @@ class SubUser extends Authenticatable implements JWTSubject
     public function referredUsers()
     {
         return $this->hasMany(User::class, 'sub_user_id', 'id');
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(SubUserTransaction::class);
     }
 }

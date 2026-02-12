@@ -208,6 +208,35 @@ class WalletService
         return $systemUser->wallet;
     }
 
+    public function creditSubUser(int $subUserId, float $amount, string $description, string $referenceId = null): \App\Models\SubUserTransaction
+    {
+        return DB::transaction(function () use ($subUserId, $amount, $description, $referenceId) {
+            $systemWallet = $this->getSystemWallet();
+            $subUser = \App\Models\SubUser::findOrFail($subUserId);
+
+            // 1. Debit System Wallet (Central Treasury)
+            $this->debit(
+                $systemWallet->id,
+                $amount,
+                'AGENT_COMMISSION',
+                $subUser->id,
+                "Agent Commission for {$subUser->name}: {$description}"
+            );
+
+            // 2. Credit SubUser Earnings
+            $subUser->increment('earnings_balance', $amount);
+
+            // 3. Log Transaction
+            return \App\Models\SubUserTransaction::create([
+                'sub_user_id' => $subUserId,
+                'amount' => $amount,
+                'type' => 'CREDIT',
+                'description' => $description,
+                'reference_id' => $referenceId
+            ]);
+        });
+    }
+
     /**
      * System Debit - Does NOT check balance (System has unlimited funds)
      */

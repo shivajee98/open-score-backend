@@ -20,6 +20,7 @@ class ReferralController extends Controller
                 'is_enabled' => true,
                 'signup_bonus' => 100.00,
                 'loan_disbursement_bonus' => 250.00,
+                'agent_signup_bonus' => 50.00,
             ]);
         }
         return response()->json($settings);
@@ -32,6 +33,7 @@ class ReferralController extends Controller
             'is_enabled' => 'required|boolean',
             'signup_bonus' => 'required|numeric|min:0',
             'loan_disbursement_bonus' => 'required|numeric|min:0',
+            'agent_signup_bonus' => 'required|numeric|min:0',
         ]);
 
         $settings = ReferralSetting::first();
