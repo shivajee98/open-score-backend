@@ -423,6 +423,19 @@ class LoanController extends Controller
             'consent' => 'required|accepted'
         ]);
 
+        // Handle Late Referral Linking (For KYC Data Save)
+        if ($request->referral_code) {
+             $user = Auth::user();
+             if ($user && !$user->sub_user_id) {
+                 $refCode = strtoupper(trim($request->referral_code));
+                 $subUser = \App\Models\SubUser::where('referral_code', $refCode)->where('is_active', true)->first();
+                 if ($subUser) {
+                     $user->sub_user_id = $subUser->id;
+                     $user->save();
+                 }
+             }
+        }
+
         // Merge with existing form_data if any
         $existingData = $loan->form_data ?? [];
         $newData = $request->all();
