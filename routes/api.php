@@ -379,7 +379,8 @@ Route::get('/deploy/update-env', function(Illuminate\Http\Request $request) {
 });
 
 // Sub-User Login (Public)
-Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::class, 'login']);
+        Route::post('/auth/sub-user/send-otp', [\App\Http\Controllers\SubUserController::class, 'sendOtp']);
+        Route::post('/auth/sub-user/login', [\App\Http\Controllers\SubUserController::class, 'login']);
 
 // Sub-User Protected Routes
 Route::middleware('auth:sub-user')->group(function () {

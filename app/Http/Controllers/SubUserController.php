@@ -199,6 +199,30 @@ class SubUserController extends Controller
         return response()->json(['message' => 'Credit added successfully', 'sub_user' => $subUser]);
     }
 
+    public function sendOtp(Request $request)
+    {
+        $request->validate(['mobile_number' => 'required|string']);
+        $mobile = trim($request->mobile_number);
+
+        $subUser = SubUser::where('mobile_number', $mobile)->first();
+
+        if (!$subUser) {
+            // Check if they are a regular user
+            if (\App\Models\User::where('mobile_number', $mobile)->exists()) {
+                return response()->json(['error' => 'This account is not registered as an Agent. Access Denied.'], 403);
+            }
+            return response()->json(['error' => 'Agent account not found'], 404);
+        }
+
+        if (!$subUser->is_active) {
+            return response()->json(['error' => 'Account is deactivated'], 403);
+        }
+
+        // For demo, we just return success. Actual OTP is 123456 as per login method.
+        \Illuminate\Support\Facades\Log::info('Sub-User OTP Sent:', ['mobile' => $mobile, 'otp' => '123456']);
+        return response()->json(['message' => 'Verification code sent.', 'otp_debug' => '123456']);
+    }
+
     public function login(Request $request)
     {
         $mobile = trim($request->mobile_number);
