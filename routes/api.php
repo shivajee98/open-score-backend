@@ -388,6 +388,17 @@ Route::middleware('auth:sub-user')->group(function () {
     Route::get('/admin/sub-users/{id}/stats', [\App\Http\Controllers\SubUserController::class, 'getReferralStats']);
     Route::get('/sub-user/my-loans', [\App\Http\Controllers\SubUserController::class, 'getMyLoans']);
     Route::post('/sub-user/loans/{id}/update', [\App\Http\Controllers\SubUserController::class, 'updateLoanStatus']);
+    
+    // Cashout Requests (Sub-User)
+    Route::post('/sub-user/cashout', [\App\Http\Controllers\SubUserPayoutController::class, 'store']);
+    Route::get('/sub-user/cashout', [\App\Http\Controllers\SubUserPayoutController::class, 'index']);
+});
+
+// Admin Cashout Management
+Route::middleware('auth:api')->group(function () {
+    Route::get('/admin/sub-user-payouts', [\App\Http\Controllers\SubUserPayoutController::class, 'adminIndex']);
+    Route::post('/admin/sub-user-payouts/{id}/approve', [\App\Http\Controllers\SubUserPayoutController::class, 'approve']);
+    Route::post('/admin/sub-user-payouts/{id}/reject', [\App\Http\Controllers\SubUserPayoutController::class, 'reject']);
 });
 
 // Remote directory listing
