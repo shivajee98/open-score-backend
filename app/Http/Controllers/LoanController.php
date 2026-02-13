@@ -789,6 +789,24 @@ class LoanController extends Controller
             ], 400);
         }
 
+        // AGENT LIMIT CHECK: Allow up to 30% overdraft
+        $borrowerForCheck = \App\Models\User::find($loan->user_id);
+        if ($borrowerForCheck && $borrowerForCheck->sub_user_id) {
+            $agentCheck = \App\Models\SubUser::find($borrowerForCheck->sub_user_id);
+            if ($agentCheck) {
+                // Calculation: Balance can go down to -(Credit Limit * 30%)
+                $overdraftCap = $agentCheck->credit_limit * 0.30;
+                $projectedBalance = $agentCheck->credit_balance - $loan->amount;
+                
+                if ($projectedBalance < -$overdraftCap) {
+                    return response()->json([
+                        'error' => 'Agent Limit Exceeded',
+                        'message' => "Agent credit limit exhausted. Max allowed overdraft is 30% of sanctioned limit (Cap: ₹{$overdraftCap})."
+                    ], 400);
+                }
+            }
+        }
+
         DB::transaction(function() use ($loan, $adminFund) {
             $loan->status = 'APPROVED';
             $loan->approved_at = now();
