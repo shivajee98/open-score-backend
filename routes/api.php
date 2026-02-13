@@ -130,6 +130,7 @@ Route::middleware('auth:api,sub-user')->group(function () {
     Route::delete('/admin/qr/batches/{id}/unmapped', [QrController::class, 'deleteBatchUnmapped']);
     Route::delete('/admin/qr/unmapped', [QrController::class, 'deleteGlobalUnmapped']);
     Route::delete('/admin/qr/{id}', [QrController::class, 'deleteCode']);
+    Route::post('/admin/qr/move', [QrController::class, 'moveToBatch']);
     
     // Merchant Cashback Management
     Route::get('/admin/merchants', [\App\Http\Controllers\MerchantCashbackController::class, 'getMerchants']);

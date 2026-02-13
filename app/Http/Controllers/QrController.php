@@ -209,4 +209,64 @@ class QrController extends Controller
             return response()->json(['message' => 'Error clearing data: ' . $e->getMessage()], 500);
         }
     }
+
+    public function moveToBatch(Request $request)
+    {
+        if (Auth::user()->role !== 'ADMIN') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'qr_ids' => 'required|array',
+            'qr_ids.*' => 'integer',
+            'batch_id' => 'nullable|integer',
+            'new_batch_name' => 'nullable|string'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $batchId = $request->batch_id;
+
+            if (!$batchId && $request->new_batch_name) {
+                $batchId = DB::table('qr_batches')->insertGetId([
+                    'name' => $request->new_batch_name,
+                    'count' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            if (!$batchId) {
+                throw new \Exception('Batch ID or New Batch Name is required');
+            }
+
+            // Get original batch IDs before moving
+            $originalBatchIds = DB::table('qr_codes')
+                ->whereIn('id', $request->qr_ids)
+                ->pluck('batch_id')
+                ->unique()
+                ->toArray();
+
+            // Update QR codes
+            DB::table('qr_codes')
+                ->whereIn('id', $request->qr_ids)
+                ->update(['batch_id' => $batchId, 'updated_at' => now()]);
+
+            // Refresh counts for all affected batches
+            $batchIdsToUpdate = array_merge($originalBatchIds, [$batchId]);
+
+            foreach (array_unique($batchIdsToUpdate) as $id) {
+                $count = DB::table('qr_codes')->where('batch_id', $id)->count();
+                DB::table('qr_batches')->where('id', $id)->update(['count' => $count]);
+            }
+
+            DB::commit();
+
+            return response()->json(['message' => 'QR codes moved successfully', 'batch_id' => $batchId]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Failed to move QR codes', 'error' => $e->getMessage()], 500);
+        }
+    }
 }
