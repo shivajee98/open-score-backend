@@ -181,8 +181,11 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|image|max:2048', // Updated to 2MB image file
+            'profile_image' => 'nullable|image|max:5120', // Up to 5MB
             'shop_image' => 'nullable|image|max:10240', // 10MB
+        ], [
+            'email.unique' => 'This Email Address is already registered with another account.',
+            'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
         ]);
 
         $user->name = $request->name;
@@ -280,6 +283,9 @@ class AuthController extends Controller
             'pincode' => 'required|string|max:10',
             'pin' => 'required|string|digits:6',
             'pin_confirmation' => 'required|same:pin'
+        ], [
+            'email.unique' => 'This Email Address is already registered with another account.',
+            'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
         ]);
 
         $user->business_name = $request->business_name;
