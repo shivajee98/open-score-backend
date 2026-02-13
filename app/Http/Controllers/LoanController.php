@@ -427,13 +427,6 @@ class LoanController extends Controller
         ]);
 
         // Handle Late Referral Linking (For KYC Data Save)
-        if ($request->referral_code) {
-             $user = Auth::user();
-             if ($user) {
-                 app(\App\Services\ReferralService::class)->processLateReferralLinking($user, $request->referral_code);
-             }
-        }
-
         // Merge with existing form_data if any
         $existingData = $loan->form_data ?? [];
         $newData = $request->all();
@@ -446,6 +439,9 @@ class LoanController extends Controller
         if ($user) {
             $profileData = [];
             
+            // Mark user as onboarded since KYC is filled
+            $profileData['is_onboarded'] = true;
+
             // Update user name if not set
             if (!$user->name || trim($user->name) === '') {
                 $profileData['name'] = trim($request->first_name . ' ' . $request->last_name);
@@ -477,6 +473,27 @@ class LoanController extends Controller
             
             if (!empty($profileData)) {
                 $user->update($profileData);
+                // Refresh user instance to ensure latest state (especially is_onboarded)
+                $user->refresh();
+            }
+
+            // Handle Referral Linking & Bonuses
+            
+            // 1. Link new referral code if provided
+            if ($request->referral_code) {
+                 app(\App\Services\ReferralService::class)->processLateReferralLinking($user, $request->referral_code);
+            }
+
+            // 2. Grant pending signup bonus (System-to-User)
+            // If user is onboarded but bonus wasn't paid (e.g. linked earlier but not onboarded then)
+            // Or if just linked above by processLateReferralLinking (which calls grantUserSignupBonus internal), 
+            // but we double check here to cover the pre-existing link case.
+            $referralRecord = \App\Models\UserReferral::where('referred_id', $user->id)->first();
+            if ($referralRecord && !$referralRecord->signup_bonus_paid) {
+                $referrer = \App\Models\User::find($referralRecord->referrer_id);
+                if ($referrer) {
+                    app(\App\Services\ReferralService::class)->grantUserSignupBonus($referrer, $user);
+                }
             }
         }
 
