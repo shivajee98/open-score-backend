@@ -230,67 +230,10 @@ Route::middleware('auth:api,sub-user')->group(function () {
     // Signup Cashback Settings
     Route::get('/admin/cashback-settings', [\App\Http\Controllers\AdminController::class, 'getCashbackSettings']);
     Route::put('/admin/cashback-settings/{role}', [\App\Http\Controllers\AdminController::class, 'updateCashbackSetting']);
-    
-    // Developer Utils (Temporary fix for remote schema errors)
-    Route::get('/admin/dev/fix-db', function() {
-        if (Auth::user()->role !== 'ADMIN') abort(403);
-        
-        $output = "";
-        try {
-            // Include and run the logic from fix_db.php
-            // We can just call it via Artisan if we prefer, but let's be direct
-            Artisan::call('migrate', ['--force' => true]);
-            $output .= "Migrations run: " . Artisan::output() . "\n";
-            
-            // Also run the manual fix script to be double sure
-            ob_start();
-            include base_path('fix_db.php');
-            $output .= ob_get_clean();
-            
-            return response($output)->header('Content-Type', 'text/plain');
-        } catch (\Exception $e) {
-            return response($e->getMessage(), 500);
-        }
-    });
-
 });
 
-// Remote Debug Endpoint (Public with Secret Key)
-Route::get('/deploy/debug', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
 
-    try {
-        $stats = [];
-        
-        // 1. Logs
-        $logPath = storage_path('logs/laravel.log');
-        if (file_exists($logPath)) {
-            $stats['recent_logs'] = array_slice(explode("\n", shell_exec("tail -n 20 " . escapeshellarg($logPath))), -20);
-        }
 
-        // 2. Schema check for loan_repayments
-        $stats['schema']['loan_repayments'] = [
-            'proof_image' => Schema::hasColumn('loan_repayments', 'proof_image'),
-            'payment_mode' => Schema::hasColumn('loan_repayments', 'payment_mode'),
-            'submitted_at' => Schema::hasColumn('loan_repayments', 'submitted_at'),
-            'submitted_by' => Schema::hasColumn('loan_repayments', 'submitted_by'),
-        ];
-
-        // 3. System User
-        $sysUser = \App\Models\User::where('role', 'SYSTEM')->first();
-        $stats['system_user'] = $sysUser ? [
-            'id' => $sysUser->id,
-            'wallet_balance' => $sysUser->wallet ? app(\App\Services\WalletService::class)->getBalance($sysUser->wallet->id) : 0
-        ] : 'NOT FOUND';
-
-        $loan = \App\Models\Loan::find($request->query('loan_id', 11));
-        $stats['target_loan'] = $loan ? ['id' => $loan->id, 'status' => $loan->status, 'amount' => $loan->amount] : 'NOT FOUND';
-        
-        return response()->json($stats);
-    } catch (\Exception $e) {
-        return response()->json(['error' => $e->getMessage()], 500);
-    }
-});
 
 // Remote System Setup (Create SYSTEM user and add float)
 Route::get('/deploy/setup-system', function(Illuminate\Http\Request $request) {
@@ -401,55 +344,9 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/sub-user-payouts/{id}/reject', [\App\Http\Controllers\SubUserPayoutController::class, 'reject']);
 });
 
-// Remote directory listing
-Route::get('/deploy/ls', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
-    
-    $startPath = $request->query('path', base_path());
-    $output = "Target Path: " . $startPath . "\n";
-    $output .= "User: " . (function_exists('posix_getpwuid') ? posix_getpwuid(posix_geteuid())['name'] : 'N/A') . "\n\n";
-    
-    $current = $startPath;
-    $depth = $request->query('levels', 1);
-    
-    for ($i = 0; $i < $depth; $i++) {
-        $output .= "Level {$i}: {$current}\n";
-        $output .= "------------------------------------------\n";
-        try {
-            if (is_dir($current) && is_readable($current)) {
-                $files = scandir($current);
-                if ($files !== false) {
-                    foreach ($files as $file) {
-                        if ($file === '.' || $file === '..') continue;
-                        $full = $current . DIRECTORY_SEPARATOR . $file;
-                        $type = is_dir($full) ? '[DIR]' : '[FILE]';
-                        $output .= "{$type} {$file}\n";
-                    }
-                }
-            } else {
-                $output .= "[Error: Directory not readable or doesn't exist]\n";
-            }
-        } catch (\Exception $e) {
-            $output .= "[Exception: " . $e->getMessage() . "]\n";
-        }
-        $output .= "\n";
-        $next = dirname($current);
-        if ($next === $current) break; 
-        $current = $next;
-    }
-    
-    return response($output)->header('Content-Type', 'text/plain');
-});
 
-// Remote shell for auditing
-Route::match(['get', 'post'], '/deploy/shell', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026' && $request->input('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
-    
-    $cmd = $request->input('cmd', $request->query('cmd', 'node -v && npm -v'));
-    $output = shell_exec($cmd . " 2>&1");
-    
-    return response($output)->header('Content-Type', 'text/plain');
-});
+
+
 
 Route::get('/deploy/logs', function(Illuminate\Http\Request $request) {
     if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
@@ -464,62 +361,10 @@ Route::get('/deploy/logs', function(Illuminate\Http\Request $request) {
     return response(implode("", $recent))->header('Content-Type', 'text/plain');
 });
 
-// Remote SQL Query (For debugging)
-Route::get('/deploy/query', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
-    
-    $sql = $request->query('sql');
-    if (!$sql) return response('SQL required', 400);
-    
-    try {
-        if (stripos($sql, 'select') === 0 || stripos($sql, 'show') === 0 || stripos($sql, 'describe') === 0) {
-            $results = DB::select($sql);
-            return response()->json($results);
-        } else {
-            return response('Only SELECT/SHOW allowed via GET', 400);
-        }
-    } catch (\Exception $e) {
-        return response($e->getMessage(), 500);
-    }
-});
 
-Route::get('/deploy/reset-test-user', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
-    $mobile = $request->query('mobile', '7777777777');
-    
-    $user = \App\Models\User::where('mobile_number', $mobile)->first();
-    if ($user) {
-        $id = $user->id;
-        // Delete related records
-        \App\Models\Wallet::where('user_id', $id)->delete();
-        \App\Models\UserReferral::where('referred_id', $id)->delete();
-        \App\Models\Loan::where('user_id', $id)->delete(); // Careful
-        $user->delete();
-        return response("User {$mobile} deleted.");
-    }
-    return response("User {$mobile} not found.");
-});
 
-// Remote file writer for testing
-Route::match(['get', 'post'], '/deploy/write-test', function(Illuminate\Http\Request $request) {
-    if ($request->query('key') !== 'openscore_deploy_2026' && $request->input('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
-    
-    $path = $request->input('path', $request->query('path'));
-    $content = $request->input('content', $request->query('content', 'Default test content'));
-    
-    if (!$path) return response('Path required', 400);
-    
-    try {
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        
-        file_put_contents($path, $content);
-        return response("File written to {$path}\nContent length: " . strlen($content));
-    } catch (\Exception $e) {
-        return response("Error: " . $e->getMessage(), 500);
-    }
-});
+
+
+
 
 

@@ -156,13 +156,12 @@ class PaymentController extends Controller
                 $cashbackAmount = min($cashbackAmount, $amount);
 
                 if ($cashbackAmount > 0) {
-                    $this->walletService->credit(
-                        $payerWallet->id,
+                    $this->walletService->transferSystemFunds(
+                        $payer->id,
                         $cashbackAmount,
                         'CASHBACK',
-                        $payment->id, // Link to the payment transaction ID
                         "Cashback for payment to {$payeeUser->name}",
-                        'COMPLETED'
+                        'OUT'
                     );
                 }
                 // ---------------------------------

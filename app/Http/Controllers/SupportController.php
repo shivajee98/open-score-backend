@@ -4,12 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Models\SupportTicket;
 use App\Models\TicketMessage;
+use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
 class SupportController extends Controller
 {
+    protected $walletService;
+
+    public function __construct(WalletService $walletService)
+    {
+        $this->walletService = $walletService;
+    }
+
     // List tickets for the authenticated user
     public function index(Request $request)
     {
@@ -423,43 +431,38 @@ class SupportController extends Controller
                     }
                 }
             } 
-            // 2. Wallet Recharge (Topup)
+            // 2. Wallet Recharge (Topup) — via Central Treasury
             elseif ($ticket->sub_action === 'recharge' || $ticket->sub_action === 'wallet_topup') {
                 $customer = $ticket->user;
-                $wallet = $customer->wallet;
+                // Ensure wallet exists
+                $wallet = $this->walletService->getWallet($customer->id);
                 if (!$wallet) {
-                     $wallet = \App\Models\Wallet::create([
-                        'user_id' => $customer->id,
-                         'uuid' => (string) \Illuminate\Support\Str::uuid(),
-                         'status' => 'ACTIVE'
-                     ]);
+                    $wallet = $this->walletService->createWallet($customer->id);
                 }
 
-                \App\Models\WalletTransaction::create([
-                    'wallet_id' => $wallet->id,
-                    'amount' => $ticket->payment_amount,
-                    'type' => 'CREDIT',
-                    'source_type' => 'TICKET',
-                    'source_id' => $ticket->id,
-                    'status' => 'COMPLETED',
-                    'description' => "Wallet recharge (₹{$ticket->payment_amount}) via ticket #{$ticket->unique_ticket_id}",
-                ]);
+                $this->walletService->transferSystemFunds(
+                    $customer->id,
+                    $ticket->payment_amount,
+                    'TICKET',
+                    "Wallet recharge (₹{$ticket->payment_amount}) via ticket #{$ticket->unique_ticket_id}",
+                    'OUT'
+                );
             }
-            // 3. Platform/Service Fee
+            // 3. Platform/Service Fee — via Central Treasury
             elseif ($ticket->sub_action === 'platform_fee' || $ticket->sub_action === 'service_fee') {
                 $customer = $ticket->user;
-                $wallet = $customer->wallet;
-                if ($wallet) {
-                    \App\Models\WalletTransaction::create([
-                        'wallet_id' => $wallet->id,
-                        'amount' => $ticket->payment_amount,
-                        'type' => 'CREDIT',
-                        'source_type' => 'PLATFORM_FEE',
-                        'source_id' => $ticket->id,
-                        'status' => 'COMPLETED',
-                        'description' => "Platform fee payment (₹{$ticket->payment_amount}) via ticket #{$ticket->unique_ticket_id}",
-                    ]);
+                $wallet = $this->walletService->getWallet($customer->id);
+                if (!$wallet) {
+                    $wallet = $this->walletService->createWallet($customer->id);
                 }
+
+                $this->walletService->transferSystemFunds(
+                    $customer->id,
+                    $ticket->payment_amount,
+                    'PLATFORM_FEE',
+                    "Platform fee payment (₹{$ticket->payment_amount}) via ticket #{$ticket->unique_ticket_id}",
+                    'OUT'
+                );
             }
 
             \DB::table('admin_logs')->insert([
@@ -580,26 +583,20 @@ class SupportController extends Controller
             return \DB::transaction(function () use ($ticket, $action, $amount, $targetId, $user) {
                 if ($action === 'recharge') {
                     $customer = $ticket->user;
-                    $wallet = $customer->wallet;
-                    
+                    // Ensure wallet exists
+                    $wallet = $this->walletService->getWallet($customer->id);
                     if (!$wallet) {
-                        $wallet = \App\Models\Wallet::create([
-                            'user_id' => $customer->id,
-                            'uuid' => (string) \Illuminate\Support\Str::uuid(),
-                            'status' => 'ACTIVE'
-                        ]);
+                        $wallet = $this->walletService->createWallet($customer->id);
                     }
                     
-                    // Create transaction record
-                    \App\Models\WalletTransaction::create([
-                        'wallet_id' => $wallet->id,
-                        'amount' => $amount,
-                        'type' => 'CREDIT',
-                        'source_type' => 'TICKET',
-                        'source_id' => $ticket->id,
-                        'status' => 'COMPLETED',
-                        'description' => "Wallet recharge (₹{$amount}) via ticket #{$ticket->unique_ticket_id}",
-                    ]);
+                    // Credit via Central Treasury
+                    $this->walletService->transferSystemFunds(
+                        $customer->id,
+                        $amount,
+                        'TICKET',
+                        "Wallet recharge (₹{$amount}) via ticket #{$ticket->unique_ticket_id}",
+                        'OUT'
+                    );
 
                 } elseif ($action === 'emi') {
                     $repayment = \App\Models\LoanRepayment::findOrFail($targetId);
@@ -619,19 +616,20 @@ class SupportController extends Controller
                     }
                 } elseif ($action === 'platform_fee') {
                     $customer = $ticket->user;
-                    $wallet = $customer->wallet;
-                    
-                    if ($wallet) {
-                        \App\Models\WalletTransaction::create([
-                            'wallet_id' => $wallet->id,
-                            'amount' => $amount,
-                            'type' => 'CREDIT',
-                            'source_type' => 'PLATFORM_FEE',
-                            'source_id' => $ticket->id,
-                            'status' => 'COMPLETED',
-                            'description' => "Platform fee payment (₹{$amount}) via ticket #{$ticket->unique_ticket_id}",
-                        ]);
+                    // Ensure wallet exists
+                    $wallet = $this->walletService->getWallet($customer->id);
+                    if (!$wallet) {
+                        $wallet = $this->walletService->createWallet($customer->id);
                     }
+
+                    // Credit via Central Treasury
+                    $this->walletService->transferSystemFunds(
+                        $customer->id,
+                        $amount,
+                        'PLATFORM_FEE',
+                        "Platform fee payment (₹{$amount}) via ticket #{$ticket->unique_ticket_id}",
+                        'OUT'
+                    );
                 }
 
                 $ticket->update([

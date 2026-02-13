@@ -312,27 +312,33 @@ class AdminController extends Controller
         $admin = \Illuminate\Support\Facades\Auth::user();
         $isAgent = $admin->role === 'SUB_USER';
         
-        $status = $isAgent ? 'PENDING' : 'COMPLETED';
-        $sourceType = 'ADMIN_CREDIT';
         $desc = $request->description ?: ($isAgent ? "Agent Credit Request" : "Admin Manual Credit");
         
         if ($request->type) {
             $desc = "[{$request->type}] " . $desc;
         }
 
-        // Create transaction
-        $this->walletService->credit(
-            $wallet->id,
-            $request->amount,
-            $sourceType,
-            $admin->id,
-            $desc,
-            $status
-        );
-
         if ($isAgent) {
+            // Agent: Create PENDING transaction (approved separately via approveFund)
+            $this->walletService->credit(
+                $wallet->id,
+                $request->amount,
+                'ADMIN_CREDIT',
+                $admin->id,
+                $desc,
+                'PENDING'
+            );
             return response()->json(['message' => 'Credit request submitted for approval']);
         }
+
+        // Admin: Immediate execution via Central Treasury
+        $this->walletService->transferSystemFunds(
+            $user->id,
+            $request->amount,
+            'ADMIN_CREDIT',
+            $desc,
+            'OUT'
+        );
 
         DB::table('admin_logs')->insert([
             'admin_id' => $admin->id,
@@ -464,16 +470,16 @@ class AdminController extends Controller
                     throw new \Exception("Transaction is not pending");
                 }
 
-                // If CASHBACK, we need to Deduct from Admin Fund and Debit System
-                if ($tx->source_type === 'CASHBACK') {
+                // If CASHBACK or ADMIN_CREDIT, we need to Debit System (Central Treasury)
+                if (in_array($tx->source_type, ['CASHBACK', 'ADMIN_CREDIT'])) {
                     // Debit System
                     $systemWallet = $this->walletService->getSystemWallet();
                     $this->walletService->systemDebit(
                         $systemWallet->id,
                         $tx->amount,
-                        'CASHBACK',
+                        $tx->source_type,
                         $tx->wallet_id,
-                        "Approved Cashback for {$tx->wallet->user->name}"
+                        "Approved {$tx->source_type} for {$tx->wallet->user->name}"
                     );
 
                     // Reduce Admin Fund
@@ -484,21 +490,6 @@ class AdminController extends Controller
                         $fund->save();
                     }
                 }
-                
-                // For ADMIN_CREDIT (Add Funds), arguably it comes from "Outside", so we don't Debit System?
-                // Or if we treat "Add Funds" as "System Injection"? 
-                // Usually "Add Funds" means User deposited cash/bank transfer.
-                // So System Wallet doesn't lose money. System Wallet might GAIN money if we tracked that.
-                // But here we are CREDITING User.
-                // If we Credit User without Debiting System, we are minting money.
-                // But AdminFund tracks "Capital Pool".
-                // User Wallet Balance is Liability (We owe them). 
-                // AdminFund is Asset (Cash on Hand).
-                // If User deposits 10k: AdminFund +10k (Cash), User Wallet +10k (Liability).
-                // So "Add Funds" should probably INCREASE AdminFund?
-                // But the `addFunds` method (line 49) handles adding to Capital Pool manually.
-                
-                // Let's stick to user request: "reduce the funds from the available to lend as the money gets more in to disbursal and cashback"
                 
                 $this->walletService->approveTransaction($id);
                 

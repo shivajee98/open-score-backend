@@ -236,12 +236,12 @@ class AuthController extends Controller
                     ->exists();
 
                 if (!$exists) {
-                    $walletService->credit(
-                        $wallet->id, 
-                        $bonusAmount, 
-                        'ONBOARDING_BONUS', 
-                        $user->id, 
-                        'Welcome bonus for Account Onboarding'
+                    $walletService->transferSystemFunds(
+                        $user->id,
+                        $bonusAmount,
+                        'ONBOARDING_BONUS',
+                        'Welcome bonus for Account Onboarding',
+                        'OUT'
                     );
                 }
             }
@@ -324,12 +324,12 @@ class AuthController extends Controller
                 ->exists();
 
             if (!$exists) {
-                $walletService->credit(
-                    $wallet->id, 
-                    $bonusAmount, 
-                    'ONBOARDING_BONUS', 
-                    $user->id, 
-                    'Welcome bonus for Merchant Profile Completion'
+                $walletService->transferSystemFunds(
+                    $user->id,
+                    $bonusAmount,
+                    'ONBOARDING_BONUS',
+                    'Welcome bonus for Merchant Profile Completion',
+                    'OUT'
                 );
             }
         }

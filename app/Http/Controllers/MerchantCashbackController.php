@@ -234,19 +234,19 @@ class MerchantCashbackController extends Controller
         }
 
         DB::transaction(function () use ($cashback, $request) {
-            // Get merchant wallet
+            // Get merchant wallet (ensure it exists)
             $wallet = $this->walletService->getWallet($cashback->merchant_id);
             if (!$wallet) {
                 $wallet = $this->walletService->createWallet($cashback->merchant_id);
             }
 
-            // Credit wallet
-            $this->walletService->credit(
-                $wallet->id,
+            // Credit wallet via Central Treasury
+            $this->walletService->transferSystemFunds(
+                $cashback->merchant_id,
                 $cashback->cashback_amount,
                 'CASHBACK',
-                $cashback->id,
-                "Merchant Cashback for " . $cashback->cashback_date->format('d M Y')
+                "Merchant Cashback for " . $cashback->cashback_date->format('d M Y'),
+                'OUT'
             );
 
             // Update cashback status
