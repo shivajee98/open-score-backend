@@ -246,7 +246,10 @@ class SupportController extends Controller
 
         $messages = $query->get();
 
-        return response()->json($messages);
+        return response()->json([
+            'status' => 'success',
+            'messages' => $messages
+        ]);
     }
 
     // Send a message in a ticket

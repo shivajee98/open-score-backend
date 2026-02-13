@@ -20,6 +20,10 @@ class TicketMessage extends Model
         'is_admin_reply',
     ];
 
+    protected $casts = [
+        'is_admin_reply' => 'boolean',
+    ];
+
     protected function attachmentUrl(): Attribute
     {
         return Attribute::make(
