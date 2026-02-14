@@ -177,13 +177,7 @@ class AuthController extends Controller
     {
         $user = \App\Models\User::find(Auth::id());
         
-        \Log::info("Onboarding attempt for user {$user->id}", [
-            'has_profile_image' => $request->hasFile('profile_image'),
-            'profile_image_name' => $request->hasFile('profile_image') ? $request->file('profile_image')->getClientOriginalName() : null,
-            'profile_image_ext' => $request->hasFile('profile_image') ? $request->file('profile_image')->getClientOriginalExtension() : null,
-            'profile_image_mime' => $request->hasFile('profile_image') ? $request->file('profile_image')->getMimeType() : null,
-            'all_files' => array_keys($request->allFiles()),
-        ]);
+        \Log::info("Onboarding attempt for user {$user->id}", ['has_profile_image' => $request->hasFile('profile_image')]);
         
         $request->validate([
             'name' => 'required|string|max:255',
@@ -203,37 +197,32 @@ class AuthController extends Controller
             $user->business_name = $request->business_name;
         }
 
-        // Handle profile image upload with robust MIME check
+        // Handle profile image upload
+        $imagePath = null;
         if ($request->hasFile('profile_image')) {
             $file = $request->file('profile_image');
             $mime = $file->getMimeType();
             
-            // Log for debugging
-            \Log::info("Processing profile_image for user {$user->id}", [
-                'name' => $file->getClientOriginalName(),
-                'mime' => $mime,
-                'size' => $file->getSize()
-            ]);
-
-            if (!str_starts_with($mime, 'image/')) {
+            if (str_starts_with($mime, 'image/')) {
+                $imagePath = $file->store('profiles', 'public');
+            } else {
                 return response()->json([
                     'message' => 'The profile image field must be an image (JPEG, PNG, etc).',
                     'errors' => ['profile_image' => ["Invalid file type: $mime"]]
                 ], 422);
             }
-
-            $path = $file->store('profiles', 'public');
-            $user->profile_image = $path; // Store relative path
         } 
-        // Fallback to shop_image if sent instead
         elseif ($request->hasFile('shop_image')) {
             $file = $request->file('shop_image');
             $mime = $file->getMimeType();
             
             if (str_starts_with($mime, 'image/')) {
-                $path = $file->store('merchants', 'public');
-                $user->profile_image = $path;
+                $imagePath = $file->store('merchants', 'public');
             }
+        }
+
+        if ($imagePath) {
+            $user->profile_image = $imagePath;
         }
 
         $user->is_onboarded = true;
