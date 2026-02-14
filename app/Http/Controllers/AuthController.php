@@ -185,7 +185,8 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'app_pin' => 'required|string|digits:4|confirmed'
+            'app_pin' => 'required|string|digits:4|confirmed',
+            'pin' => 'nullable|string|digits:6|confirmed'
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
             'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
@@ -227,7 +228,6 @@ class AuthController extends Controller
         }
 
         $user->is_onboarded = true;
-        $user->is_onboarded = true;
         
         // Only set to MERCHANT if explicitly requested or if current process implies it
         // Do NOT force if user is already CUSTOMER/ADMIN
@@ -246,6 +246,10 @@ class AuthController extends Controller
         
         if (!$wallet) {
             $wallet = $walletService->createWallet($user->id);
+        }
+
+        if ($request->has('pin')) {
+            $walletService->setPin($wallet->id, $request->pin);
         }
 
         // Generate fresh token with updated is_onboarded claim
@@ -314,10 +318,7 @@ class AuthController extends Controller
             'customer_segment' => 'required|string|max:255',
             'daily_turnover' => 'required|string|max:255',
             'business_address' => 'required|string',
-            'pincode' => 'required|string|max:10',
-            'app_pin' => 'required|string|digits:4|confirmed',
-            'pin' => 'required|string|digits:6',
-            'pin_confirmation' => 'required|same:pin'
+            'pincode' => 'required|string|max:10'
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
             'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
@@ -332,20 +333,12 @@ class AuthController extends Controller
         $user->is_onboarded = true;
         $user->save();
 
-        // Set Transaction PIN
+        // Ensure wallet exists
         $walletService = app(\App\Services\WalletService::class);
         $wallet = $walletService->getWallet($user->id);
         
         if (!$wallet) {
             $wallet = $walletService->createWallet($user->id);
-        }
-
-        if ($request->app_pin) {
-            $user->app_pin = $request->app_pin;
-        }
-
-        if ($request->pin) {
-            $walletService->setPin($wallet->id, $request->pin);
         }
 
         // Credit merchant onboarding bonus from settings
