@@ -165,6 +165,8 @@ class AuthController extends Controller
             ]);
         }
 
+        $user->has_app_pin = !empty($user->app_pin);
+
         return response()->json([
             'access_token' => $token,
             'token_type' => 'bearer',
@@ -183,6 +185,7 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
+            'app_pin' => 'required|string|digits:4|confirmed'
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
             'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
@@ -226,6 +229,9 @@ class AuthController extends Controller
         $user->is_onboarded = true;
         // Optimization: Ensure user is MERCHANT if they are on this merchant-onboarding path
         $user->role = 'MERCHANT';
+        if ($request->has('app_pin')) {
+            $user->app_pin = $request->app_pin;
+        }
         $user->save();
 
         // Ensure wallet exists
@@ -300,6 +306,7 @@ class AuthController extends Controller
             'daily_turnover' => 'required|string|max:255',
             'business_address' => 'required|string',
             'pincode' => 'required|string|max:10',
+            'app_pin' => 'required|string|digits:4|confirmed',
             'pin' => 'required|string|digits:6',
             'pin_confirmation' => 'required|same:pin'
         ], [
@@ -322,6 +329,10 @@ class AuthController extends Controller
         
         if (!$wallet) {
             $wallet = $walletService->createWallet($user->id);
+        }
+
+        if ($request->app_pin) {
+            $user->app_pin = $request->app_pin;
         }
 
         if ($request->pin) {
@@ -461,6 +472,7 @@ class AuthController extends Controller
             'business_type' => 'nullable|string|max:255',
             'map_location_url' => 'nullable|string|max:500',
             'shop_images' => 'nullable|array',
+            'app_pin' => 'nullable|string|digits:4|confirmed'
         ]);
 
         $user = \App\Models\User::find(Auth::id());
@@ -484,6 +496,10 @@ class AuthController extends Controller
                 }
             }
             $user->shop_images = $paths; // Model cast handles array to JSON
+        }
+
+        if ($request->app_pin) {
+            $user->app_pin = $request->app_pin;
         }
 
         // Only allow bank details update if not already set
