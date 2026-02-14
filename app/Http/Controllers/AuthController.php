@@ -189,27 +189,8 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'profile_image' => [
-                'nullable',
-                'file',
-                'max:10240', // Loosened to 10MB
-                function ($attribute, $value, $fail) {
-                    $ext = strtolower($value->getClientOriginalExtension());
-                    $allowed = ['jpeg', 'png', 'jpg', 'gif', 'svg', 'webp', 'heic', 'heif'];
-                    
-                    if (!$ext) {
-                        $mime = $value->getMimeType();
-                        if (str_starts_with($mime, 'image/')) return;
-                        $fail("The $attribute field must be a file of type: " . implode(', ', $allowed) . " (No extension detected)");
-                        return;
-                    }
-                    
-                    if (!in_array($ext, $allowed)) {
-                        $fail("The $attribute field must be a file of type: " . implode(', ', $allowed) . " (Detected: $ext)");
-                    }
-                }
-            ],
-            'shop_image' => 'nullable|file|max:10240',
+            'profile_image' => 'nullable|file|max:15360', // 15MB
+            'shop_image' => 'nullable|file|max:15360', // 15MB
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
             'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
@@ -222,15 +203,37 @@ class AuthController extends Controller
             $user->business_name = $request->business_name;
         }
 
-        // Handle profile image upload
+        // Handle profile image upload with robust MIME check
         if ($request->hasFile('profile_image')) {
-            $path = $request->file('profile_image')->store('profiles', 'public');
+            $file = $request->file('profile_image');
+            $mime = $file->getMimeType();
+            
+            // Log for debugging
+            \Log::info("Processing profile_image for user {$user->id}", [
+                'name' => $file->getClientOriginalName(),
+                'mime' => $mime,
+                'size' => $file->getSize()
+            ]);
+
+            if (!str_starts_with($mime, 'image/')) {
+                return response()->json([
+                    'message' => 'The profile image field must be an image (JPEG, PNG, etc).',
+                    'errors' => ['profile_image' => ["Invalid file type: $mime"]]
+                ], 422);
+            }
+
+            $path = $file->store('profiles', 'public');
             $user->profile_image = $path; // Store relative path
         } 
-        // Fallback to direct file upload handling (shop_image as profile_image fallback? previous code had this)
+        // Fallback to shop_image if sent instead
         elseif ($request->hasFile('shop_image')) {
-            $path = $request->file('shop_image')->store('merchants', 'public');
-            $user->profile_image = $path; // Store relative path
+            $file = $request->file('shop_image');
+            $mime = $file->getMimeType();
+            
+            if (str_starts_with($mime, 'image/')) {
+                $path = $file->store('merchants', 'public');
+                $user->profile_image = $path;
+            }
         }
 
         $user->is_onboarded = true;
@@ -440,7 +443,7 @@ class AuthController extends Controller
             'business_type' => 'nullable|string|max:255',
             'map_location_url' => 'nullable|string|max:500',
             'shop_images' => 'nullable|array',
-            'shop_images.*' => 'extensions:jpeg,png,jpg,gif,svg,webp,heic,heif|max:2048', // 2MB per image
+            'shop_images.*' => 'file|max:10240', // 10MB per image
         ]);
 
         $user = \App\Models\User::find(Auth::id());
@@ -458,7 +461,10 @@ class AuthController extends Controller
         if ($request->hasFile('shop_images')) {
             $paths = [];
             foreach ($request->file('shop_images') as $image) {
-                $paths[] = $image->store('merchants', 'public');
+                $mime = $image->getMimeType();
+                if (str_starts_with($mime, 'image/')) {
+                    $paths[] = $image->store('merchants', 'public');
+                }
             }
             $user->shop_images = $paths; // Model cast handles array to JSON
         }
