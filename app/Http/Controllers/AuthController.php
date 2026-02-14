@@ -181,8 +181,8 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|image|max:5120', // Up to 5MB
-            'shop_image' => 'nullable|image|max:10240', // 10MB
+            'profile_image' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp,heic,heif|max:5120', // Up to 5MB
+            'shop_image' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp,heic,heif|max:10240', // 10MB
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
             'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
