@@ -17,6 +17,24 @@ Route::post('/auth/verify', [AuthController::class, 'verifyOtp']);
 Route::get('/payees', [AuthController::class, 'listPayees']);
 Route::get('/merchants', [AuthController::class, 'listPayees']); // Legacy support
 
+// Temporary DB Update for App PIN
+Route::get('/deploy/add-app-pin-column', function(Illuminate\Http\Request $request) {
+    if ($request->query('key') !== 'openscore_deploy_2026') return response('Unauthorized', 401);
+    
+    try {
+        \Illuminate\Support\Facades\DB::statement("ALTER TABLE users ADD COLUMN app_pin VARCHAR(255) NULL AFTER password");
+        return response("Column app_pin added successfully.");
+    } catch (\Exception $e) {
+        return response("Error or already exists: " . $e->getMessage());
+    }
+});
+
+// App Lock PIN Routes
+Route::middleware('auth:api')->group(function() {
+    Route::post('/auth/set-app-pin', [AuthController::class, 'setAppPin']);
+    Route::post('/auth/verify-app-pin', [AuthController::class, 'verifyAppPin']);
+});
+
 // External KYC (Publicly accessible with token)
 Route::get('/kyc/verify/{token}', [LoanController::class, 'verifyKycToken']);
 Route::post('/kyc/upload/{token}', [LoanController::class, 'uploadKycFile']);

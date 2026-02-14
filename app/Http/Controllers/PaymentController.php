@@ -89,7 +89,7 @@ class PaymentController extends Controller
 
             // Verify PIN
             if (!$this->walletService->verifyPin($payerWallet->id, $request->pin)) {
-                throw new \Exception("Invalid PIN");
+                return response()->json(['error' => 'Invalid PIN'], 400);
             }
 
             // Requirement: Only those customers could transfer money who have added their bank account

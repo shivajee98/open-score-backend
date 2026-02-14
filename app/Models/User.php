@@ -48,14 +48,16 @@ class User extends Authenticatable implements JWTSubject
         'description',
         'aadhar_number',
         'pan_number',
-        'support_category_id'
+        'support_category_id',
+        'app_pin'
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
         'otp',
-        'otp_expires_at'
+        'otp_expires_at',
+        'app_pin'
     ];
 
     protected function casts(): array
@@ -63,6 +65,7 @@ class User extends Authenticatable implements JWTSubject
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'app_pin' => 'hashed',
             'otp_expires_at' => 'datetime',
             'is_onboarded' => 'boolean',
             'shop_images' => 'array',

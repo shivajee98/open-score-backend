@@ -385,12 +385,41 @@ class AuthController extends Controller
         }
         
         $user->append('active_locked_balance');
+        $user->has_app_pin = !empty($user->app_pin);
         
         if (in_array($user->role, ['SUPPORT', 'SUPPORT_AGENT'])) {
             $user->load('supportCategory');
         }
 
         return response()->json($user);
+    }
+
+    public function setAppPin(Request $request)
+    {
+        $request->validate([
+            'pin' => 'required|string|digits:4|confirmed'
+        ]);
+
+        $user = Auth::user();
+        $user->app_pin = $request->pin; // Model cast hashed
+        $user->save();
+
+        return response()->json(['message' => 'App lock PIN set successfully']);
+    }
+
+    public function verifyAppPin(Request $request)
+    {
+        $request->validate([
+            'pin' => 'required|string|digits:4'
+        ]);
+
+        $user = Auth::user();
+        
+        if (\Illuminate\Support\Facades\Hash::check($request->pin, $user->app_pin)) {
+            return response()->json(['valid' => true]);
+        }
+
+        return response()->json(['valid' => false, 'message' => 'Invalid PIN'], 401);
     }
 
     public function logout()
