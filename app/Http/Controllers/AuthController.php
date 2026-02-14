@@ -181,11 +181,13 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp,heic,heif|max:5120', // Up to 5MB
-            'shop_image' => 'nullable|mimes:jpeg,png,jpg,gif,svg,webp,heic,heif|max:10240', // 10MB
+            'profile_image' => 'nullable|extensions:jpeg,png,jpg,gif,svg,webp,heic,heif|max:5120', // Up to 5MB
+            'shop_image' => 'nullable|extensions:jpeg,png,jpg,gif,svg,webp,heic,heif|max:10240', // 10MB
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
-            'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
+            'mobile_number.unique' => 'This Mobile Number is already registered with another account.',
+            'profile_image.extensions' => 'The profile image field must be a file of type: jpeg, png, jpg, gif, svg, webp, heic, heif.',
+            'shop_image.extensions' => 'The shop image field must be a file of type: jpeg, png, jpg, gif, svg, webp, heic, heif.'
         ]);
 
         $user->name = $request->name;
@@ -413,7 +415,7 @@ class AuthController extends Controller
             'business_type' => 'nullable|string|max:255',
             'map_location_url' => 'nullable|string|max:500',
             'shop_images' => 'nullable|array',
-            'shop_images.*' => 'image|max:2048', // 2MB per image
+            'shop_images.*' => 'extensions:jpeg,png,jpg,gif,svg,webp,heic,heif|max:2048', // 2MB per image
         ]);
 
         $user = \App\Models\User::find(Auth::id());
