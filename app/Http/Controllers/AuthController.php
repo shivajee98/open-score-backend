@@ -64,87 +64,93 @@ class AuthController extends Controller
              
              $isNewUserSignup = !$user || (!$user->is_onboarded && !$user->referredBy()->exists());
 
-             if (!$user || $isNewUserSignup) {
-                 if (!$role) {
-                     return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
-                 }
+            if (!$user || $isNewUserSignup) {
+                if (!$role) {
+                    return response()->json(['status' => 'NEW_USER', 'onboarding_status' => 'NEW_USER']);
+                }
                                   
-                  // Handle Referral Logic for New User - DISABLED (Moved to KYC)
-                  /*
-                  $referralCampaignId = null;
-                  $subUserId = null;
-                  $cashbackAmount = 0;
-                  $referrerId = null; 
+                // Handle Referral Logic for New User
+                $subUserId = null;
+                $referrerId = null;
+
+                if ($referralCode) {
+                    // Check Agent (SubUser)
+                    $subUser = \App\Models\SubUser::where('referral_code', $referralCode)->where('is_active', true)->first();
+                    if ($subUser) {
+                        $subUserId = $subUser->id;
+                        \Log::info("Referral Matched: Agent {$subUserId}");
+                    } else {
+                        // Check User
+                        $referrer = \App\Models\User::where('my_referral_code', $referralCode)->first();
+                        if ($referrer) {
+                           $referrerId = $referrer->id;
+                           \Log::info("Referral Matched: User {$referrerId}");
+                        }
+                    }
+                }
                   
-                  if ($referralCode) {
-                     // ... (Referral Logic Removed) ...
-                  } else {
-                      // Get default signup cashback from settings
-                      $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $role)
-                          ->where('is_active', true)
-                          ->first();
-                      if ($cashbackSetting) {
-                          $cashbackAmount = $cashbackSetting->cashback_amount;
+                // Get or Create
+                $user = \App\Models\User::where('mobile_number', $mobile)->first() ?: new \App\Models\User(['mobile_number' => $mobile]);
+                $user->role = $role;
+                $user->status = 'ACTIVE';
+                $user->is_onboarded = false;
+                $user->password = bcrypt('password');
+                
+                if ($subUserId) $user->sub_user_id = $subUserId; 
+                if (empty($user->my_referral_code)) {
+                    $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
+                }
+                $user->save();
+
+                \Log::info("User created with ID: {$user->id}, is_onboarded: " . ($user->is_onboarded ? 'true' : 'false'));
+
+                // Create Wallet for new user
+                $walletService = app(\App\Services\WalletService::class);
+                $walletService->createWallet($user->id);
+
+                // Handle personal referral - Create UserReferral record
+                if ($referrerId && $referrerId !== $user->id) {
+                    \App\Models\UserReferral::firstOrCreate(
+                        ['referrer_id' => $referrerId, 'referred_id' => $user->id],
+                        ['referral_code' => $referralCode, 'signup_bonus_earned' => 0, 'signup_bonus_paid' => false]
+                    );
+                }
+
+            } else {
+                
+                 // Ensure existing user has a referral code
+                 if (empty($user->my_referral_code)) {
+                     $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
+                     $user->save();
+                 }
+
+                 // If user exists but is not onboarded, update the role if provided
+                 if (!$user->is_onboarded && $role) {
+                     $user->role = $role;
+                     $user->save();
+                 }
+
+                 // LINK EXISTING USER TO AGENT IF NOT LINKED
+                 if ($referralCode && !$user->sub_user_id && !$user->referredBy()->exists()) {
+                      // Check Agent (SubUser)
+                      $subUser = \App\Models\SubUser::where('referral_code', $referralCode)->where('is_active', true)->first();
+                      if ($subUser) {
+                          $user->sub_user_id = $subUser->id;
+                          $user->save();
+                          \Log::info("Referral Matched (Existing): Agent {$subUser->id}");
+                      } else {
+                          // Check User
+                          $referrer = \App\Models\User::where('my_referral_code', $referralCode)->first();
+                          if ($referrer && $referrer->id !== $user->id) {
+                              \App\Models\UserReferral::firstOrCreate(
+                                  ['referrer_id' => $referrer->id, 'referred_id' => $user->id],
+                                  ['referral_code' => $referralCode, 'signup_bonus_earned' => 0, 'signup_bonus_paid' => false]
+                              );
+                              \Log::info("Referral Matched (Existing): User {$referrer->id}");
+                          }
                       }
-                  }
-                  */
-                  
-                   // Get or Create
-                   $user = \App\Models\User::where('mobile_number', $mobile)->first() ?: new \App\Models\User(['mobile_number' => $mobile]);
-                   $user->role = $role;
-                   $user->status = 'ACTIVE';
-                   $user->is_onboarded = false;
-                   $user->password = bcrypt('password');
-                   // if ($referralCampaignId) $user->referral_campaign_id = $referralCampaignId; // DISABLED
-                   // if ($subUserId) $user->sub_user_id = $subUserId; // DISABLED
-                   if (empty($user->my_referral_code)) {
-                       $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
-                   }
-                   $user->save();
-
-                  \Log::info("User created with ID: {$user->id}, is_onboarded: " . ($user->is_onboarded ? 'true' : 'false'));
-
-                  // Create Wallet for new user
-                  $walletService = app(\App\Services\WalletService::class);
-                  $walletService->createWallet($user->id);
-
-                  // Handle personal referral - Create UserReferral record - DISABLED
-                  /*
-                  if ($referrerId) {
-                      // ...
-                  }
-                  */
-
-                  // Credit Referral/Signup Bonus - DISABLED (Moved to KYC or post-onboarding)
-                  /*
-                  $alreadyHasBonus = ...
-                  if ($cashbackAmount > 0 && !$alreadyHasBonus) {
-                      // ...
-                  }
-                  */
-
-
-             } else {
-                 
-                  // Ensure existing user has a referral code
-                  if (empty($user->my_referral_code)) {
-                      $user->my_referral_code = strtoupper(\Illuminate\Support\Str::random(8));
-                      $user->save();
-                  }
-
-                  // If user exists but is not onboarded, update the role if provided
-                  if (!$user->is_onboarded && $role) {
-                      $user->role = $role;
-                      $user->save();
-                  }
-
-                  // LINK EXISTING USER TO AGENT IF NOT LINKED - DISABLED
-                  /*
-                  if ($referralCode && !$user->sub_user_id && !$user->referredBy()->exists()) {
-                      // ...
-                  }
-                  */
-             }
+                 }
+            }
         }
 
         // Final Suspension Check
@@ -257,11 +263,16 @@ class AuthController extends Controller
 
         // CREDIT SIGNUP BONUS FOR CUSTOMER/STUDENT (Auto-Transfer)
         if ($user->role === 'CUSTOMER' || $user->role === 'STUDENT') {
+            // Fetch settings - prioritize ReferralSetting as primary source of truth for bonuses
+            $referralSetting = \App\Models\ReferralSetting::first();
             $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $user->role)
                 ->where('is_active', true)
                 ->first();
             
-            $bonusAmount = $cashbackSetting ? $cashbackSetting->cashback_amount : 50; // Default 50 for customer
+            // Use ReferralSetting signup_bonus if available (as requested to match admin panel), else fallback
+            $bonusAmount = ($referralSetting && $referralSetting->signup_bonus > 0) 
+                ? $referralSetting->signup_bonus 
+                : ($cashbackSetting ? $cashbackSetting->cashback_amount : 50);
             
             if ($bonusAmount > 0) {
                 // Check if already credited
@@ -505,28 +516,30 @@ class AuthController extends Controller
         }
 
         // Only allow bank details update if not already set
-        if (!$user->account_number && ($request->account_number || $request->ifsc_code)) {
-            $checkAcc = $request->account_number ?: $user->account_number;
-            $checkIfsc = strtoupper($request->ifsc_code ?: $user->ifsc_code);
+        // Bank Details Update
+        // Check uniqueness if changing account number
+        if ($request->account_number || $request->ifsc_code) {
+             $checkAcc = $request->account_number ?: $user->account_number;
+             $checkIfsc = strtoupper($request->ifsc_code ?: $user->ifsc_code);
 
-            if ($checkAcc && $checkIfsc) {
-                $exists = \App\Models\User::where('account_number', $checkAcc)
-                    ->where('ifsc_code', $checkIfsc)
-                    ->where('id', '!=', Auth::id())
-                    ->exists();
-                
-                if ($exists) {
-                    return response()->json([
-                        'error' => 'This bank account is already associated with another account. Please use your own unique bank details.'
-                    ], 422);
-                }
-            }
-
-            if ($request->bank_name) $user->bank_name = $request->bank_name;
-            if ($request->account_number) $user->account_number = $request->account_number;
-            if ($request->ifsc_code) $user->ifsc_code = strtoupper($request->ifsc_code);
-            if ($request->account_holder_name) $user->account_holder_name = $request->account_holder_name;
+             if ($checkAcc && $checkIfsc) {
+                 $exists = \App\Models\User::where('account_number', $checkAcc)
+                     ->where('ifsc_code', $checkIfsc)
+                     ->where('id', '!=', Auth::id())
+                     ->exists();
+                 
+                 if ($exists) {
+                     return response()->json([
+                         'error' => 'This bank account is already associated with another account. Please use your own unique bank details.'
+                     ], 422);
+                 }
+             }
         }
+
+        if ($request->bank_name) $user->bank_name = $request->bank_name;
+        if ($request->account_number) $user->account_number = $request->account_number;
+        if ($request->ifsc_code) $user->ifsc_code = strtoupper($request->ifsc_code);
+        if ($request->account_holder_name) $user->account_holder_name = $request->account_holder_name;
         
         $user->save();
 
