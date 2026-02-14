@@ -189,13 +189,30 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|extensions:jpeg,png,jpg,gif,svg,webp,heic,heif|max:5120', // Up to 5MB
-            'shop_image' => 'nullable|extensions:jpeg,png,jpg,gif,svg,webp,heic,heif|max:10240', // 10MB
+            'profile_image' => [
+                'nullable',
+                'file',
+                'max:10240', // Loosened to 10MB
+                function ($attribute, $value, $fail) {
+                    $ext = strtolower($value->getClientOriginalExtension());
+                    $allowed = ['jpeg', 'png', 'jpg', 'gif', 'svg', 'webp', 'heic', 'heif'];
+                    
+                    if (!$ext) {
+                        $mime = $value->getMimeType();
+                        if (str_starts_with($mime, 'image/')) return;
+                        $fail("The $attribute field must be a file of type: " . implode(', ', $allowed) . " (No extension detected)");
+                        return;
+                    }
+                    
+                    if (!in_array($ext, $allowed)) {
+                        $fail("The $attribute field must be a file of type: " . implode(', ', $allowed) . " (Detected: $ext)");
+                    }
+                }
+            ],
+            'shop_image' => 'nullable|file|max:10240',
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
-            'mobile_number.unique' => 'This Mobile Number is already registered with another account.',
-            'profile_image.extensions' => 'The profile image field must be a file of type: jpeg, png, jpg, gif, svg, webp, heic, heif.',
-            'shop_image.extensions' => 'The shop image field must be a file of type: jpeg, png, jpg, gif, svg, webp, heic, heif.'
+            'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
         ]);
 
         $user->name = $request->name;
