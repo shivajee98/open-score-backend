@@ -28,7 +28,7 @@ class AuthController extends Controller
         $request->validate([
             'mobile_number' => 'required|string',
             'otp' => 'required|string',
-            'role' => 'nullable|string|in:CUSTOMER,MERCHANT,ADMIN,SUPPORT',
+            'role' => 'nullable|string|in:CUSTOMER,MERCHANT,ADMIN,SUPPORT,STUDENT',
             'referral_code' => 'nullable|string'
         ]);
 
@@ -255,9 +255,9 @@ class AuthController extends Controller
         // Generate fresh token with updated is_onboarded claim
         $token = Auth::guard('api')->login($user);
 
-        // CREDIT SIGNUP BONUS FOR CUSTOMER (Auto-Transfer)
-        if ($user->role === 'CUSTOMER') {
-            $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'CUSTOMER')
+        // CREDIT SIGNUP BONUS FOR CUSTOMER/STUDENT (Auto-Transfer)
+        if ($user->role === 'CUSTOMER' || $user->role === 'STUDENT') {
+            $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $user->role)
                 ->where('is_active', true)
                 ->first();
             
