@@ -263,16 +263,19 @@ class AuthController extends Controller
 
         // CREDIT SIGNUP BONUS FOR CUSTOMER/STUDENT (Auto-Transfer)
         if ($user->role === 'CUSTOMER' || $user->role === 'STUDENT') {
-            // Fetch settings - prioritize ReferralSetting as primary source of truth for bonuses
-            $referralSetting = \App\Models\ReferralSetting::first();
+            // Fetch settings - New Logic: Always use SignupCashbackSetting for the NEW USER
+            // ReferralSetting->signup_bonus is for the REFERRER, not the new user.
             $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', $user->role)
                 ->where('is_active', true)
                 ->first();
             
-            // Use ReferralSetting signup_bonus if available (as requested to match admin panel), else fallback
-            $bonusAmount = ($referralSetting && $referralSetting->signup_bonus > 0) 
-                ? $referralSetting->signup_bonus 
-                : ($cashbackSetting ? $cashbackSetting->cashback_amount : 50);
+            // Use SignupCashbackSetting as primary source for the user's welcome bonus
+            $bonusAmount = ($cashbackSetting) ? $cashbackSetting->cashback_amount : 50;
+            
+            // Only use ReferralSetting if we absolutely want to override for referred users, 
+            // but the user requirement is "both will get set amount as set by admin", meaning
+            // New User gets "Signup Bonus" (10rs), Referrer gets "Referral Bonus" (90rs).
+            // So we strictly stick to $cashbackSetting for the new user.
             
             if ($bonusAmount > 0) {
                 // Check if already credited
