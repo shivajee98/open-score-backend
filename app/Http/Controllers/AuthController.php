@@ -572,4 +572,12 @@ class AuthController extends Controller
             'user' => $user->load('supportCategory'),
         ]);
     }
+
+    public function markWelcomeBonusSeen()
+    {
+        $user = Auth::guard('api')->user();
+        $user->has_seen_welcome_bonus = true;
+        $user->save();
+        return response()->json(['message' => 'Marked as seen.']);
+    }
 }

@@ -60,6 +60,7 @@ Route::middleware('auth:api,sub-user')->group(function () {
     Route::post('/auth/set-pin', [WalletController::class, 'setPin']); // Alias for frontend
     Route::post('/auth/update-profile', [AuthController::class, 'updateProfile']);
     Route::post('/auth/complete-merchant-profile', [AuthController::class, 'completeMerchantProfile']);
+    Route::post('/auth/welcome-bonus-seen', [AuthController::class, 'markWelcomeBonusSeen']);
     
     // Loan
     Route::post('/loans/apply', [LoanController::class, 'apply']);

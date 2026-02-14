@@ -49,6 +49,7 @@ class User extends Authenticatable implements JWTSubject
         'aadhar_number',
         'pan_number',
         'support_category_id',
+        'has_seen_welcome_bonus',
         'app_pin'
     ];
 
@@ -69,6 +70,7 @@ class User extends Authenticatable implements JWTSubject
             'otp_expires_at' => 'datetime',
             'is_onboarded' => 'boolean',
             'shop_images' => 'array',
+            'has_seen_welcome_bonus' => 'boolean',
         ];
     }
 
