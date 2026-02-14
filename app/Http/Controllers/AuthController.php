@@ -224,6 +224,8 @@ class AuthController extends Controller
         }
 
         $user->is_onboarded = true;
+        // Optimization: Ensure user is MERCHANT if they are on this merchant-onboarding path
+        $user->role = 'MERCHANT';
         $user->save();
 
         // Ensure wallet exists
@@ -237,9 +239,9 @@ class AuthController extends Controller
         // Generate fresh token with updated is_onboarded claim
         $token = Auth::guard('api')->login($user);
 
-        // Credit signup bonus for CUSTOMER (matches Merchant behavior)
-        if ($user->role === 'CUSTOMER') {
-            $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'CUSTOMER')
+        // Credit signup bonus for MERCHANT
+        if ($user->role === 'MERCHANT') {
+            $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'MERCHANT')
                 ->where('is_active', true)
                 ->first();
             
@@ -456,7 +458,23 @@ class AuthController extends Controller
         }
 
         // Only allow bank details update if not already set
-        if (!$user->account_number) {
+        if (!$user->account_number && ($request->account_number || $request->ifsc_code)) {
+            $checkAcc = $request->account_number ?: $user->account_number;
+            $checkIfsc = strtoupper($request->ifsc_code ?: $user->ifsc_code);
+
+            if ($checkAcc && $checkIfsc) {
+                $exists = \App\Models\User::where('account_number', $checkAcc)
+                    ->where('ifsc_code', $checkIfsc)
+                    ->where('id', '!=', Auth::id())
+                    ->exists();
+                
+                if ($exists) {
+                    return response()->json([
+                        'error' => 'This bank account is already associated with another account. Please use your own unique bank details.'
+                    ], 422);
+                }
+            }
+
             if ($request->bank_name) $user->bank_name = $request->bank_name;
             if ($request->account_number) $user->account_number = $request->account_number;
             if ($request->ifsc_code) $user->ifsc_code = strtoupper($request->ifsc_code);

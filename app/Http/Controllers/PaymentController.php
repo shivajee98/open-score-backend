@@ -92,6 +92,13 @@ class PaymentController extends Controller
                 throw new \Exception("Invalid PIN");
             }
 
+            // Requirement: Only those customers could transfer money who have added their bank account
+            if (empty($payer->account_number) || empty($payer->ifsc_code)) {
+                return response()->json([
+                    'error' => 'Please add your Bank Account details in your profile before transferring money.'
+                ], 403);
+            }
+
             $targetId = $request->payee_wallet_uuid;
             $payeeWallet = null;
 
@@ -187,6 +194,14 @@ class PaymentController extends Controller
         ]);
         
         $user = Auth::user();
+        
+        // Requirement: Only those customers could transfer money who have added their bank account in profile
+        if (empty($user->account_number) || empty($user->ifsc_code)) {
+            return response()->json([
+                'error' => 'Please add and verify your Bank Account details in your profile before initiating a withdrawal.'
+            ], 403);
+        }
+
         $wallet = $this->walletService->getWallet($user->id);
         if (!$wallet) $wallet = $this->walletService->createWallet($user->id);
         
