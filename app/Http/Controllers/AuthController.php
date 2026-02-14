@@ -251,33 +251,33 @@ class AuthController extends Controller
         // Generate fresh token with updated is_onboarded claim
         $token = Auth::guard('api')->login($user);
 
-        // Credit signup bonus ONLY for MERCHANTS (and if not already credited)
-        if ($user->role === 'MERCHANT') {
-            $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'MERCHANT')
+        // CREDIT SIGNUP BONUS FOR CUSTOMER (Auto-Transfer)
+        if ($user->role === 'CUSTOMER') {
+            $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'CUSTOMER')
                 ->where('is_active', true)
                 ->first();
             
-            $bonusAmount = $cashbackSetting ? $cashbackSetting->cashback_amount : 100;
+            $bonusAmount = $cashbackSetting ? $cashbackSetting->cashback_amount : 50; // Default 50 for customer
             
             if ($bonusAmount > 0) {
                 // Check if already credited
                 $exists = \App\Models\WalletTransaction::where('wallet_id', $wallet->id)
                     ->where('type', 'CREDIT')
-                    ->whereIn('source_type', ['SIGNUP_BONUS', 'ONBOARDING_BONUS', 'REFERRAL_BONUS', 'REFERRAL_WELCOME_BONUS'])
+                    ->whereIn('source_type', ['SIGNUP_BONUS', 'ONBOARDING_BONUS'])
                     ->exists();
 
                 if (!$exists) {
                     $walletService->transferSystemFunds(
                         $user->id,
                         $bonusAmount,
-                        'ONBOARDING_BONUS',
-                        'Welcome bonus for Account Onboarding',
+                        'SIGNUP_BONUS',
+                        'Welcome bonus for New Customer',
                         'OUT'
                     );
                 }
             }
 
-            // REFERRAL BONUS (User-to-User only, Agent cashback is on loan disbursement)
+            // REFERRAL BONUS (User-to-User only)
             $referralService = app(\App\Services\ReferralService::class);
 
             // 2. Referrer User Bonus
@@ -289,6 +289,9 @@ class AuthController extends Controller
                 }
             }
         }
+
+        // MERCHANT BONUS IS DEFERRED TO 'completeMerchantProfile' (Claim Action)
+        // Previously acted here, now removed.
 
         return response()->json([
             'message' => 'Onboarding completed',
