@@ -183,8 +183,6 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
             'business_name' => 'nullable|string|max:255',
-            'profile_image' => 'nullable|file|max:15360', // 15MB
-            'shop_image' => 'nullable|file|max:15360', // 15MB
         ], [
             'email.unique' => 'This Email Address is already registered with another account.',
             'mobile_number.unique' => 'This Mobile Number is already registered with another account.'
@@ -432,7 +430,6 @@ class AuthController extends Controller
             'business_type' => 'nullable|string|max:255',
             'map_location_url' => 'nullable|string|max:500',
             'shop_images' => 'nullable|array',
-            'shop_images.*' => 'file|max:10240', // 10MB per image
         ]);
 
         $user = \App\Models\User::find(Auth::id());
