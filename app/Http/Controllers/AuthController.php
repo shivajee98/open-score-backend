@@ -177,6 +177,14 @@ class AuthController extends Controller
     {
         $user = \App\Models\User::find(Auth::id());
         
+        \Log::info("Onboarding attempt for user {$user->id}", [
+            'has_profile_image' => $request->hasFile('profile_image'),
+            'profile_image_name' => $request->hasFile('profile_image') ? $request->file('profile_image')->getClientOriginalName() : null,
+            'profile_image_ext' => $request->hasFile('profile_image') ? $request->file('profile_image')->getClientOriginalExtension() : null,
+            'profile_image_mime' => $request->hasFile('profile_image') ? $request->file('profile_image')->getMimeType() : null,
+            'all_files' => array_keys($request->allFiles()),
+        ]);
+        
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . Auth::id(),
