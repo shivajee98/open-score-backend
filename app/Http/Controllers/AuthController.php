@@ -227,8 +227,14 @@ class AuthController extends Controller
         }
 
         $user->is_onboarded = true;
-        // Optimization: Ensure user is MERCHANT if they are on this merchant-onboarding path
-        $user->role = 'MERCHANT';
+        $user->is_onboarded = true;
+        
+        // Only set to MERCHANT if explicitly requested or if current process implies it
+        // Do NOT force if user is already CUSTOMER/ADMIN
+        if ($user->role !== 'MERCHANT' && $request->has('business_name')) {
+             $user->role = 'MERCHANT';
+        }
+        
         if ($request->has('app_pin')) {
             $user->app_pin = $request->app_pin;
         }
@@ -245,7 +251,7 @@ class AuthController extends Controller
         // Generate fresh token with updated is_onboarded claim
         $token = Auth::guard('api')->login($user);
 
-        // Credit signup bonus for MERCHANT
+        // Credit signup bonus ONLY for MERCHANTS (and if not already credited)
         if ($user->role === 'MERCHANT') {
             $cashbackSetting = \App\Models\SignupCashbackSetting::where('role', 'MERCHANT')
                 ->where('is_active', true)
